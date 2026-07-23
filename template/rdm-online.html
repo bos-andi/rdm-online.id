@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="id">
+ <head><script src="/_sdk/telemetry_sdk.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RDM-ONLINE.ID Dashboard</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://cdn.jsdelivr.net/npm/lucide@0.263.0/dist/umd/lucide.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+  <style>
+        body { font-family: 'DM Sans', sans-serif; }
+        .menu-item { transition: all 0.15s; }
+        .menu-item:hover, .menu-item.active { background: rgba(59,130,246,0.15); color: #60a5fa; }
+        .stat-card { backdrop-filter: blur(10px); }
+        .deploy-step.completed { color: #34d399; }
+        .deploy-step.processing { color: #fbbf24; animation: pulse 1s infinite; }
+        @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+        .sidebar-scroll::-webkit-scrollbar { width: 4px; }
+        .sidebar-scroll::-webkit-scrollbar-thumb { background: #334155; border-radius: 2px; }
+    </style>
+  <script src="/_sdk/data_sdk.js" type="text/javascript"></script>
+  <script src="/_sdk/resizing_sdk.js" type="text/javascript"></script>
+ </head>
+ <body data-template-id="__page-root" class="min-h-screen flex bg-slate-900 text-slate-200"><!-- Mobile Header -->
+  <div class="lg:hidden fixed top-0 left-0 right-0 z-50 bg-slate-800 border-b border-slate-700 p-3 flex items-center gap-3"><button id="mobile-toggle" class="p-2 rounded-lg hover:bg-slate-700"><i data-lucide="menu" class="w-5 h-5"></i></button> <span class="font-bold text-blue-400">RDM-ONLINE.ID</span>
+  </div><!-- Sidebar -->
+  <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 z-40 w-64 bg-slate-800 border-r border-slate-700 flex flex-col transform -translate-x-full lg:translate-x-0 transition-transform">
+   <div class="p-5 border-b border-slate-700">
+    <h1 data-template-id="brand-title" class="canva-text font-bold text-xl text-blue-400"></h1>
+    <p data-template-id="brand-subtitle" class="canva-text text-xs text-slate-400 mt-1"></p>
+   </div><!-- Role Switcher -->
+   <div class="p-3 border-b border-slate-700">
+    <div class="flex rounded-lg bg-slate-900 p-1"><button id="role-user" class="flex-1 text-xs font-medium py-2 rounded-md bg-blue-600 text-white transition-all">Pengguna</button> <button id="role-admin" class="flex-1 text-xs font-medium py-2 rounded-md text-slate-400 transition-all">Admin</button>
+    </div>
+   </div><!-- Menu -->
+   <nav class="flex-1 overflow-y-auto sidebar-scroll p-3 space-y-1" id="nav-menu"></nav>
+   <div class="p-4 border-t border-slate-700">
+    <div class="flex items-center gap-3">
+     <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center text-sm font-bold">
+      M
+     </div>
+     <div>
+      <p class="text-sm font-medium">MI Nurul Huda</p>
+      <p class="text-xs text-slate-400">madrasah@email.com</p>
+     </div>
+    </div>
+   </div>
+  </aside><!-- Overlay -->
+  <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-30 hidden lg:hidden" onclick="toggleSidebar()"></div><!-- Main -->
+  <main class="flex-1 lg:ml-0 mt-14 lg:mt-0 overflow-y-auto" style="min-height:calc(100 * min(var(--vh,1vh),1vh))">
+   <div class="p-6 max-w-6xl mx-auto" id="main-content"></div>
+  </main>
+  <script src="/_sdk/editing_sdk.js"></script>
+  <script>
+    const userMenu = [
+        {icon:'home',label:'Dashboard',id:'dashboard'},
+        {icon:'book-open',label:'RDM Saya',id:'rdm'},
+        {icon:'plus-circle',label:'Buat RDM Baru',id:'deploy'},
+        {icon:'globe',label:'Domain & DNS',id:'domain'},
+        {icon:'hard-drive',label:'Backup & Restore',id:'backup'},
+        {icon:'activity',label:'Monitoring',id:'monitoring'},
+        {icon:'credit-card',label:'Billing & Pembayaran',id:'billing'},
+        {icon:'life-buoy',label:'Support Center',id:'support'},
+        {icon:'user',label:'Profil Akun',id:'profil'}
+    ];
+    const adminMenu = [
+        {icon:'home',label:'Dashboard Admin',id:'admin-dashboard'},
+        {icon:'users',label:'Manajemen Pelanggan',id:'admin-pelanggan'},
+        {icon:'server',label:'Manajemen RDM',id:'admin-rdm'},
+        {icon:'monitor',label:'Manajemen Server VPS',id:'admin-vps'},
+        {icon:'globe',label:'DNS & Cloudflare',id:'admin-dns'},
+        {icon:'database',label:'Database Manager',id:'admin-db'},
+        {icon:'hard-drive',label:'Backup Center',id:'admin-backup'},
+        {icon:'credit-card',label:'Billing Management',id:'admin-billing'},
+        {icon:'life-buoy',label:'Support Management',id:'admin-support'},
+        {icon:'megaphone',label:'Pengumuman',id:'admin-pengumuman'},
+        {icon:'settings',label:'Pengaturan Sistem',id:'admin-settings'},
+        {icon:'file-text',label:'Log Aktivitas',id:'admin-log'}
+    ];
+
+    const content = {
+        dashboard: `<div class="mb-6"><h2 class="text-2xl font-bold">Dashboard</h2><p class="text-slate-400 mt-1">Ringkasan layanan Anda</p></div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            <div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">RDM Aktif</p><p class="text-3xl font-bold text-blue-400 mt-1">3</p></div>
+            <div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Masa Aktif</p><p class="text-3xl font-bold text-emerald-400 mt-1">89 hari</p></div>
+            <div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Penyimpanan</p><p class="text-3xl font-bold text-amber-400 mt-1">2.4 GB</p></div>
+            <div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Backup Terakhir</p><p class="text-lg font-medium mt-1">21 Jun 2026</p></div>
+            <div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Status Server</p><p class="text-lg font-medium text-emerald-400 mt-1">● Online</p></div>
+            <div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Notifikasi</p><p class="text-3xl font-bold text-rose-400 mt-1">2</p></div>
+            </div>`,
+        rdm: `<div class="mb-6"><h2 class="text-2xl font-bold">RDM Saya</h2></div>
+            <div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead class="bg-slate-700/50"><tr><th class="p-3 text-left">Nama</th><th class="p-3 text-left">Domain</th><th class="p-3 text-left">Status</th><th class="p-3 text-left">Aksi</th></tr></thead><tbody>
+            <tr class="border-t border-slate-700"><td class="p-3 font-medium">MI Nurul Huda</td><td class="p-3 text-blue-400">nurulhuda.rdm-online.id</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400">Aktif</span></td><td class="p-3"><button class="text-xs bg-blue-600 px-3 py-1 rounded">Login</button></td></tr>
+            <tr class="border-t border-slate-700"><td class="p-3 font-medium">MTs Al-Ikhlas</td><td class="p-3 text-blue-400">alikhlas.rdm-online.id</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400">Aktif</span></td><td class="p-3"><button class="text-xs bg-blue-600 px-3 py-1 rounded">Login</button></td></tr>
+            </tbody></table></div>`,
+        deploy: `<div class="mb-6"><h2 class="text-2xl font-bold">🚀 Buat RDM Baru</h2><p class="text-slate-400 mt-1">One Click Deploy</p></div>
+            <div class="bg-slate-800 border border-slate-700 rounded-xl p-6 max-w-lg">
+            <form id="deploy-form" class="space-y-4">
+            <div><label class="block text-sm font-medium mb-1" for="nama">Nama Madrasah</label><input id="nama" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm focus:border-blue-500 outline-none" placeholder="MI Nurul Huda"></div>
+            <div><label class="block text-sm font-medium mb-1" for="jenjang">Jenjang</label><select id="jenjang" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm"><option>RA</option><option>MI</option><option>MTs</option><option>MA</option></select></div>
+            <div><label class="block text-sm font-medium mb-1" for="subdomain">Subdomain</label><div class="flex"><input id="subdomain" class="flex-1 bg-slate-900 border border-slate-600 rounded-l-lg px-4 py-2.5 text-sm outline-none" placeholder="namamadrasah"><span class="bg-slate-700 border border-slate-600 border-l-0 rounded-r-lg px-3 py-2.5 text-sm text-slate-400">.rdm-online.id</span></div></div>
+            <div><label class="block text-sm font-medium mb-1" for="server">Server</label><select id="server" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm"><option>SG-01 (Singapore)</option><option>ID-01 (Jakarta)</option></select></div>
+            <div><label class="block text-sm font-medium mb-1" for="paket">Paket</label><select id="paket" class="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-2.5 text-sm"><option>Starter - Rp50.000/bln</option><option>Pro - Rp100.000/bln</option><option>Enterprise - Rp200.000/bln</option></select></div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition-colors">🚀 Deploy Sekarang</button>
+            </form>
+            <div id="deploy-progress" class="hidden mt-6 space-y-2 text-sm"></div>
+            </div>`,
+        domain:`<div class="mb-6"><h2 class="text-2xl font-bold">Domain & DNS</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3"><div class="flex justify-between items-center py-2 border-b border-slate-700"><span>nurulhuda.rdm-online.id</span><span class="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full">SSL Active</span></div><div class="flex justify-between items-center py-2"><span>alikhlas.rdm-online.id</span><span class="text-xs px-2 py-1 bg-emerald-500/20 text-emerald-400 rounded-full">SSL Active</span></div></div>`,
+        backup:`<div class="mb-6"><h2 class="text-2xl font-bold">Backup & Restore</h2></div><div class="grid gap-4 sm:grid-cols-2"><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><h3 class="font-semibold mb-2">Backup Otomatis</h3><p class="text-slate-400 text-sm">Setiap hari pukul 02:00 WIB</p><p class="text-emerald-400 text-sm mt-2">● Aktif</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><h3 class="font-semibold mb-2">Backup Terakhir</h3><p class="text-slate-400 text-sm">21 Jun 2026 - 02:00 WIB</p><button class="mt-3 text-xs bg-blue-600 px-3 py-1.5 rounded">Download</button></div></div>`,
+        monitoring:`<div class="mb-6"><h2 class="text-2xl font-bold">Monitoring</h2></div><div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">CPU</p><div class="mt-2 h-2 bg-slate-700 rounded-full"><div class="h-2 bg-blue-500 rounded-full" style="width:23%"></div></div><p class="text-right text-xs text-slate-400 mt-1">23%</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">RAM</p><div class="mt-2 h-2 bg-slate-700 rounded-full"><div class="h-2 bg-amber-500 rounded-full" style="width:58%"></div></div><p class="text-right text-xs text-slate-400 mt-1">58%</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Storage</p><div class="mt-2 h-2 bg-slate-700 rounded-full"><div class="h-2 bg-emerald-500 rounded-full" style="width:34%"></div></div><p class="text-right text-xs text-slate-400 mt-1">34%</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Uptime</p><p class="text-2xl font-bold text-emerald-400 mt-1">99.9%</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Database</p><p class="text-emerald-400 mt-1">● Online</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Website</p><p class="text-emerald-400 mt-1">● Online</p></div></div>`,
+        billing:`<div class="mb-6"><h2 class="text-2xl font-bold">Billing & Pembayaran</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><div class="flex justify-between items-center mb-4"><div><p class="font-semibold">Paket Pro</p><p class="text-slate-400 text-sm">Rp100.000/bulan</p></div><span class="px-3 py-1 bg-blue-600/20 text-blue-400 rounded-full text-xs">Aktif</span></div><div class="border-t border-slate-700 pt-4"><p class="text-sm text-slate-400">Tagihan berikutnya: 21 Jul 2026</p></div></div>`,
+        support:`<div class="mb-6"><h2 class="text-2xl font-bold">Support Center</h2></div><div class="space-y-3"><button class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-left hover:border-blue-500 transition-colors"><span class="font-medium">📝 Buat Tiket Bantuan</span></button><button class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-left hover:border-blue-500 transition-colors"><span class="font-medium">📋 Riwayat Tiket</span></button><button class="w-full bg-slate-800 border border-slate-700 rounded-xl p-4 text-left hover:border-blue-500 transition-colors"><span class="font-medium">📖 Panduan Penggunaan</span></button><a href="https://wa.me/628123456789" target="_blank" rel="noopener noreferrer" class="block w-full bg-emerald-600 hover:bg-emerald-700 rounded-xl p-4 text-center font-semibold transition-colors">💬 Live Chat WhatsApp</a></div>`,
+        profil:`<div class="mb-6"><h2 class="text-2xl font-bold">Profil Akun</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-6 space-y-4 max-w-lg"><div><p class="text-sm text-slate-400">Nama</p><p class="font-medium">MI Nurul Huda</p></div><div><p class="text-sm text-slate-400">Email</p><p class="font-medium">admin@nurulhuda.sch.id</p></div><div><p class="text-sm text-slate-400">Jenjang</p><p class="font-medium">MI (Madrasah Ibtidaiyah)</p></div><div class="pt-4 border-t border-slate-700 space-y-2"><button class="w-full bg-slate-700 hover:bg-slate-600 py-2.5 rounded-lg text-sm transition-colors">Ubah Password</button><button class="w-full bg-rose-600/20 text-rose-400 hover:bg-rose-600/30 py-2.5 rounded-lg text-sm transition-colors">Logout</button></div></div>`
+    };
+
+    // Admin content
+    content['admin-dashboard'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Dashboard Admin</h2></div><div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4"><div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Total Pelanggan</p><p class="text-3xl font-bold text-blue-400 mt-1">147</p></div><div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">RDM Aktif</p><p class="text-3xl font-bold text-emerald-400 mt-1">312</p></div><div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Server VPS</p><p class="text-3xl font-bold text-amber-400 mt-1">5</p></div><div class="stat-card bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Pendapatan Bulan Ini</p><p class="text-2xl font-bold text-emerald-400 mt-1">Rp14.7jt</p></div></div>`;
+    content['admin-pelanggan'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Manajemen Pelanggan</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl overflow-hidden"><table class="w-full text-sm"><thead class="bg-slate-700/50"><tr><th class="p-3 text-left">Nama</th><th class="p-3 text-left">Email</th><th class="p-3 text-left">RDM</th><th class="p-3 text-left">Status</th></tr></thead><tbody><tr class="border-t border-slate-700"><td class="p-3">MI Nurul Huda</td><td class="p-3 text-slate-400">admin@nurulhuda.sch.id</td><td class="p-3">2</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400">Aktif</span></td></tr><tr class="border-t border-slate-700"><td class="p-3">MTs Al-Falah</td><td class="p-3 text-slate-400">info@alfalah.sch.id</td><td class="p-3">1</td><td class="p-3"><span class="px-2 py-1 rounded-full text-xs bg-emerald-500/20 text-emerald-400">Aktif</span></td></tr></tbody></table></div>`;
+    content['admin-rdm'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Manajemen RDM</h2><p class="text-slate-400 text-sm mt-1">Deploy, rebuild, suspend, dan kelola semua RDM</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400">312 RDM terdaftar di sistem</p></div>`;
+    content['admin-vps'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Manajemen Server VPS</h2></div><div class="grid gap-4 sm:grid-cols-2"><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><h3 class="font-semibold">SG-01</h3><p class="text-slate-400 text-sm">Singapore • 8 vCPU • 16GB RAM</p><div class="mt-3 h-2 bg-slate-700 rounded-full"><div class="h-2 bg-blue-500 rounded-full" style="width:45%"></div></div><p class="text-xs text-slate-400 mt-1">67/150 RDM</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><h3 class="font-semibold">ID-01</h3><p class="text-slate-400 text-sm">Jakarta • 8 vCPU • 16GB RAM</p><div class="mt-3 h-2 bg-slate-700 rounded-full"><div class="h-2 bg-amber-500 rounded-full" style="width:72%"></div></div><p class="text-xs text-slate-400 mt-1">108/150 RDM</p></div></div>`;
+    content['admin-dns'] = `<div class="mb-6"><h2 class="text-2xl font-bold">DNS & Cloudflare</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400 text-sm">Zone: rdm-online.id</p><p class="text-emerald-400 text-sm mt-1">● Cloudflare Active</p></div>`;
+    content['admin-db'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Database Manager</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400">312 database aktif</p></div>`;
+    content['admin-backup'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Backup Center</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400">Backup otomatis berjalan setiap hari pukul 02:00 WIB</p></div>`;
+    content['admin-billing'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Billing Management</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><div class="grid grid-cols-2 gap-4"><div><p class="text-slate-400 text-sm">Tagihan Pending</p><p class="text-xl font-bold text-amber-400">12</p></div><div><p class="text-slate-400 text-sm">Lunas Bulan Ini</p><p class="text-xl font-bold text-emerald-400">135</p></div></div></div>`;
+    content['admin-support'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Support Management</h2></div><div class="grid gap-4 sm:grid-cols-3"><div class="bg-slate-800 border border-slate-700 rounded-xl p-5 text-center"><p class="text-2xl font-bold text-amber-400">3</p><p class="text-slate-400 text-sm">Tiket Masuk</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5 text-center"><p class="text-2xl font-bold text-blue-400">2</p><p class="text-slate-400 text-sm">Diproses</p></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5 text-center"><p class="text-2xl font-bold text-emerald-400">48</p><p class="text-slate-400 text-sm">Selesai</p></div></div>`;
+    content['admin-pengumuman'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Pengumuman</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5"><p class="text-slate-400">Broadcast informasi ke seluruh pelanggan</p></div>`;
+    content['admin-settings'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Pengaturan Sistem</h2></div><div class="space-y-3"><div class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex justify-between items-center"><span>Pengaturan Deploy</span><span class="text-xs text-emerald-400">● Configured</span></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex justify-between items-center"><span>Cloudflare API</span><span class="text-xs text-emerald-400">● Connected</span></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex justify-between items-center"><span>WhatsApp Gateway</span><span class="text-xs text-emerald-400">● Active</span></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-4 flex justify-between items-center"><span>SMTP</span><span class="text-xs text-emerald-400">● Active</span></div></div>`;
+    content['admin-log'] = `<div class="mb-6"><h2 class="text-2xl font-bold">Log Aktivitas</h2></div><div class="bg-slate-800 border border-slate-700 rounded-xl p-5 space-y-3 text-sm"><div class="flex justify-between border-b border-slate-700 pb-2"><span>Deploy RDM: alfalah.rdm-online.id</span><span class="text-slate-400">2 jam lalu</span></div><div class="flex justify-between border-b border-slate-700 pb-2"><span>Backup Server SG-01</span><span class="text-slate-400">5 jam lalu</span></div><div class="flex justify-between"><span>Login Admin: superadmin</span><span class="text-slate-400">6 jam lalu</span></div></div>`;
+
+    let currentRole = 'user';
+    let currentPage = 'dashboard';
+
+    function renderMenu() {
+        const menu = currentRole === 'user' ? userMenu : adminMenu;
+        const nav = document.getElementById('nav-menu');
+        nav.innerHTML = menu.map(m => `<button class="menu-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-left ${currentPage===m.id?'active':''}" data-page="${m.id}"><i data-lucide="${m.icon}" class="w-4 h-4"></i>${m.label}</button>`).join('');
+        lucide.createIcons();
+        nav.querySelectorAll('.menu-item').forEach(btn => {
+            btn.addEventListener('click', () => { navigate(btn.dataset.page); });
+        });
+    }
+
+    function navigate(page) {
+        currentPage = page;
+        document.getElementById('main-content').innerHTML = content[page] || `<div class="text-slate-400">Halaman ${page}</div>`;
+        renderMenu();
+        // Close mobile sidebar
+        if(window.innerWidth < 1024) toggleSidebar();
+        // Attach deploy form
+        if(page === 'deploy') {
+            document.getElementById('deploy-form').addEventListener('submit', handleDeploy);
+        }
+    }
+
+    function handleDeploy(e) {
+        e.preventDefault();
+        const steps = ['Membuat DNS Cloudflare','Membuat Database','Copy Source RDM','Konfigurasi Database','Membuat Nginx Virtual Host','Reload Nginx','Install SSL','Generate Akun Awal','Mengirim Notifikasi WhatsApp'];
+        const prog = document.getElementById('deploy-progress');
+        prog.classList.remove('hidden');
+        prog.innerHTML = steps.map(s => `<div class="deploy-step flex items-center gap-2 text-slate-500"><i data-lucide="circle" class="w-3 h-3"></i><span>${s}</span></div>`).join('');
+        lucide.createIcons();
+        let i = 0;
+        const interval = setInterval(() => {
+            if(i > 0) prog.children[i-1].classList.remove('processing');
+            if(i > 0) { prog.children[i-1].classList.add('completed'); prog.children[i-1].querySelector('i').setAttribute('data-lucide','check-circle'); }
+            if(i < steps.length) { prog.children[i].classList.add('processing'); prog.children[i].querySelector('i').setAttribute('data-lucide','loader'); lucide.createIcons(); i++; }
+            else { clearInterval(interval); prog.innerHTML += `<div class="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-lg text-emerald-400 text-sm">✅ Deploy berhasil! URL: <strong>https://${document.getElementById('subdomain').value||'namamadrasah'}.rdm-online.id</strong></div>`; }
+        }, 800);
+    }
+
+    function toggleSidebar() {
+        const sb = document.getElementById('sidebar');
+        const ov = document.getElementById('sidebar-overlay');
+        sb.classList.toggle('-translate-x-full');
+        ov.classList.toggle('hidden');
+    }
+
+    document.getElementById('mobile-toggle').addEventListener('click', toggleSidebar);
+    document.getElementById('role-user').addEventListener('click', () => { currentRole='user'; currentPage='dashboard'; document.getElementById('role-user').className='flex-1 text-xs font-medium py-2 rounded-md bg-blue-600 text-white transition-all'; document.getElementById('role-admin').className='flex-1 text-xs font-medium py-2 rounded-md text-slate-400 transition-all'; renderMenu(); navigate(currentPage); });
+    document.getElementById('role-admin').addEventListener('click', () => { currentRole='admin'; currentPage='admin-dashboard'; document.getElementById('role-admin').className='flex-1 text-xs font-medium py-2 rounded-md bg-blue-600 text-white transition-all'; document.getElementById('role-user').className='flex-1 text-xs font-medium py-2 rounded-md text-slate-400 transition-all'; renderMenu(); navigate(currentPage); });
+
+    renderMenu();
+    navigate('dashboard');
+    </script>
+ <script>(function(){function c(){var b=a.contentDocument||a.contentWindow.document;if(b){var d=b.createElement('script');d.innerHTML="window.__CF$cv$params={r:'a0f1a137a2483f94',t:'MTc4MjAzMDQwMS4wMDAwMDA='};var a=document.createElement('script');a.nonce='';a.src='/cdn-cgi/challenge-platform/scripts/jsd/main.js';document.getElementsByTagName('head')[0].appendChild(a);";b.getElementsByTagName('head')[0].appendChild(d)}}if(document.body){var a=document.createElement('iframe');a.height=1;a.width=1;a.style.position='absolute';a.style.top=0;a.style.left=0;a.style.border='none';a.style.visibility='hidden';document.body.appendChild(a);if('loading'!==document.readyState)c();else if(window.addEventListener)document.addEventListener('DOMContentLoaded',c);else{var e=document.onreadystatechange||function(){};document.onreadystatechange=function(b){e(b);'loading'!==document.readyState&&(document.onreadystatechange=e,c())}}}})();</script></body>
+</html>

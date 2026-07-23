@@ -1,0 +1,1 @@
+../../scripts/rdm-remote-bootstrap.sh
