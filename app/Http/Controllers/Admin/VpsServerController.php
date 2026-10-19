@@ -3,46 +3,56 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\SetupVpsServerJob;
 use App\Models\VpsServer;
 use App\Services\RemoteDeployExecutor;
+use App\Services\VpsSetupService;
 use App\Services\VpsSpecService;
 use App\Services\VpsSshKeyService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Validation\Rule;
 
 class VpsServerController extends Controller
 {
     public function store(Request $request, VpsSshKeyService $sshKeys, VpsSpecService $specs): RedirectResponse
     {
+        $request->merge(['code' => $request->filled('code') ? strtoupper(trim($request->input('code'))) : null]);
+
         $data = $request->validate([
-            'code' => ['required', 'string', 'max:20', 'regex:/^[A-Z0-9-]+$/', Rule::unique('vps_servers', 'code')],
-            'location' => ['required', 'string', 'max:100'],
-            'ip_address' => ['required', 'ip'],
-            'max_rdm_capacity' => ['required', 'integer', 'min:1', 'max:10000'],
+            'code' => ['nullable', 'string', 'max:20', 'regex:/^[A-Z0-9-]+$/', Rule::unique('vps_servers', 'code')],
+            'location' => ['nullable', 'string', 'max:100'],
+            'ip_address' => ['required', 'ip', Rule::unique('vps_servers', 'ip_address')],
+            'max_rdm_capacity' => ['nullable', 'integer', 'min:1', 'max:10000'],
             'deploy_base_path' => ['nullable', 'string', 'max:255'],
             'ssh_key_name' => ['nullable', 'string', 'max:100'],
             'ssh_user' => ['nullable', 'string', 'max:64'],
             'ssh_port' => ['nullable', 'integer', 'min:1', 'max:65535'],
-            'ssh_private_key' => ['nullable', 'string'],
-            'generate_ssh_key' => ['sometimes', 'boolean'],
+            'ssh_key_mode' => ['nullable', 'in:shared,generate,paste'],
+            'ssh_private_key' => ['nullable', 'required_if:ssh_key_mode,paste', 'string'],
             'notes' => ['nullable', 'string', 'max:1000'],
             'is_local' => ['sometimes', 'boolean'],
-            'accepts_deploy' => ['sometimes', 'boolean'],
+        ], [
+            'ip_address.unique' => 'IP ini sudah terdaftar sebagai server.',
+            'ssh_private_key.required_if' => 'Paste private key, atau pilih opsi key lain.',
         ]);
 
         if ($request->boolean('is_local')) {
             VpsServer::query()->update(['is_local' => false, 'is_primary' => false]);
         }
 
+        $code = $data['code'] ?? $this->nextServerCode();
+
         $server = VpsServer::create([
-            'code' => $data['code'],
-            'location' => $data['location'],
+            'code' => $code,
+            'location' => $data['location'] ?? $this->detectLocation($data['ip_address']),
             'ip_address' => $data['ip_address'],
             'vcpu' => 0,
             'ram_gb' => 0,
-            'max_rdm_capacity' => $data['max_rdm_capacity'],
+            'max_rdm_capacity' => $data['max_rdm_capacity'] ?? 0,
             'deploy_base_path' => $data['deploy_base_path'] ?? null,
             'ssh_key_name' => $data['ssh_key_name'] ?? null,
             'ssh_user' => $data['ssh_user'] ?? 'root',
@@ -54,18 +64,20 @@ class VpsServerController extends Controller
             'is_active' => true,
         ]);
 
-        $message = 'Server VPS '.$data['code'].' berhasil ditambahkan.';
+        $message = 'Server VPS '.$code.' ('.$server->ip_address.') berhasil ditambahkan.';
+        $keyMode = $data['ssh_key_mode'] ?? ($sshKeys->sharedKeyPath() ? 'shared' : 'generate');
 
         if (! $server->is_local) {
             try {
-                if ($request->boolean('generate_ssh_key')) {
-                    $sshKeys->generateAndStore($server, $data['ssh_key_name'] ?? $data['code']);
-                    $message .= ' Key SSH dibuat — salin public key ke portal VPS, lalu Tes SSH untuk deteksi vCPU/RAM.';
-                } elseif (filled($data['ssh_private_key'] ?? null)) {
-                    $sshKeys->storeFromPrivateKey($server, $data['ssh_private_key'], $data['ssh_key_name'] ?? $data['code']);
-                    $message .= ' Key SSH disimpan. Klik Tes SSH untuk deteksi vCPU/RAM.';
+                if ($keyMode === 'shared') {
+                    $sshKeys->useSharedKey($server);
+                    $message .= ' Memakai SSH key '.$sshKeys->sharedKeyLabel().' — jika VPS sudah terdaftar di '.$sshKeys->sharedKeyLabel().', langsung klik Setup Otomatis.';
+                } elseif ($keyMode === 'paste') {
+                    $sshKeys->storeFromPrivateKey($server, $data['ssh_private_key'], $data['ssh_key_name'] ?? $code);
+                    $message .= ' Key SSH disimpan. Klik Setup Otomatis.';
                 } else {
-                    $message .= ' Klik Tes SSH untuk deteksi vCPU/RAM otomatis.';
+                    $sshKeys->generateAndStore($server, $data['ssh_key_name'] ?? $code);
+                    $message .= ' Key SSH dibuat — pasang public key di VPS (portal provider atau Salin perintah Console), lalu klik Setup Otomatis.';
                 }
             } catch (\Throwable $e) {
                 return redirect()
@@ -80,7 +92,30 @@ class VpsServerController extends Controller
 
         return redirect()
             ->route('admin.vps')
-            ->with('status', $message.' Aktifkan server ini untuk deploy jika ingin dipakai pelanggan baru.');
+            ->with('status', $server->is_local
+                ? $message.' Aktifkan server ini untuk deploy jika ingin dipakai pelanggan baru.'
+                : $message.' Setelah setup selesai, klik Aktifkan untuk Deploy.');
+    }
+
+    private function nextServerCode(): string
+    {
+        $max = VpsServer::query()->pluck('code')
+            ->map(fn ($code) => preg_match('/^ID-(\d+)$/', $code, $m) ? (int) $m[1] : 0)
+            ->max() ?? 0;
+
+        return sprintf('ID-%02d', $max + 1);
+    }
+
+    private function detectLocation(string $ip): string
+    {
+        try {
+            $info = Http::timeout(5)->get('https://ipinfo.io/'.$ip.'/json')->json();
+            $place = collect([$info['city'] ?? null, $info['country'] ?? null])->filter()->implode(', ');
+
+            return $place !== '' ? mb_substr($place, 0, 100) : '-';
+        } catch (\Throwable) {
+            return '-';
+        }
     }
 
     public function updateSsh(Request $request, VpsServer $vpsServer, VpsSshKeyService $sshKeys): RedirectResponse
@@ -95,6 +130,7 @@ class VpsServerController extends Controller
             'ssh_port' => ['required', 'integer', 'min:1', 'max:65535'],
             'ssh_private_key' => ['nullable', 'string'],
             'generate_ssh_key' => ['sometimes', 'boolean'],
+            'use_shared_ssh_key' => ['sometimes', 'boolean'],
         ]);
 
         $vpsServer->update([
@@ -104,6 +140,12 @@ class VpsServerController extends Controller
         ]);
 
         try {
+            if ($request->boolean('use_shared_ssh_key')) {
+                $sshKeys->useSharedKey($vpsServer);
+
+                return back()->with('status', $vpsServer->code.': Sekarang memakai SSH key '.$sshKeys->sharedKeyLabel().'. Klik Tes SSH untuk memastikan.');
+            }
+
             if ($request->boolean('generate_ssh_key')) {
                 $sshKeys->generateAndStore($vpsServer, $data['ssh_key_name'] ?? $vpsServer->code);
 
@@ -182,7 +224,7 @@ class VpsServerController extends Controller
     public function testConnection(VpsServer $vpsServer, RemoteDeployExecutor $executor, VpsSshKeyService $sshKeys, VpsSpecService $specs): RedirectResponse
     {
         $sshKeys->materializeKeyFile($vpsServer);
-        $result = $executor->testConnection($vpsServer->fresh());
+        $result = $executor->testConnectionDetectingUser($vpsServer->fresh());
 
         if (! $result['ok']) {
             return back()->withErrors(['vps' => $vpsServer->code.': '.$result['message']]);
@@ -230,5 +272,30 @@ class VpsServerController extends Controller
         $specs->detectAndStore($vpsServer->fresh());
 
         return back()->with('status', $vpsServer->code.': Sync deploy berhasil. '.$output);
+    }
+
+    public function startSetup(VpsServer $vpsServer, VpsSetupService $setup): JsonResponse
+    {
+        if ($vpsServer->is_local) {
+            return response()->json(['message' => 'Server lokal panel tidak perlu setup.'], 422);
+        }
+
+        if ($setup->isRunning($vpsServer)) {
+            return response()->json(['message' => 'Setup sedang berjalan.'] + $setup->payload($vpsServer));
+        }
+
+        if (! $vpsServer->isRemoteReady()) {
+            return response()->json(['message' => 'Key SSH belum ada. Buat key di Kelola SSH, lalu pasang public key di VPS.'], 422);
+        }
+
+        $setup->markQueued($vpsServer);
+        SetupVpsServerJob::dispatch($vpsServer);
+
+        return response()->json(['message' => 'Setup dimulai.'] + $setup->payload($vpsServer));
+    }
+
+    public function setupStatus(VpsServer $vpsServer, VpsSetupService $setup): JsonResponse
+    {
+        return response()->json($setup->payload($vpsServer));
     }
 }

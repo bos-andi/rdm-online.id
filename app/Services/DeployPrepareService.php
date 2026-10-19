@@ -42,6 +42,11 @@ class DeployPrepareService
                 'must_change_password' => false,
             ]);
 
+            app(AffiliateService::class)->attachToUser(
+                $user,
+                app(AffiliateService::class)->resolveForSignup($data['referral_code'] ?? null, request()),
+            );
+
             Auth::login($user);
             request()->session()->regenerate();
             $accountCreated = true;

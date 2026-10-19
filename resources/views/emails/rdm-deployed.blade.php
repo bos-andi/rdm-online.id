@@ -18,7 +18,7 @@ Silakan buka URL di atas untuk melakukan setup awal aplikasi RDM.
 Buka RDM Online
 </x-mail::button>
 
-Jika ada kendala, hubungi support@rdm-online.id.
+Jika ada kendala, hubungi {{ config('company.email') }}.
 
 Terima kasih,<br>
 {{ config('app.name') }}

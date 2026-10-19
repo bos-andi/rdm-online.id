@@ -5,12 +5,12 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Models\RdmInstance;
 use App\Models\User;
+use App\Services\AffiliateService;
 use App\Services\DeployPrepareService;
 use App\Services\DeployService;
 use App\Services\DeployStatusService;
 use App\Services\PaymentService;
 use App\Services\SubscriptionService;
-use App\Services\XenditService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -29,16 +29,21 @@ class DeployController extends Controller
             'subdomain' => ['required', 'string', 'max:30'],
             'madrasah_name' => ['required', 'string', 'max:150'],
             'jenjang' => ['required', 'in:RA,MI,MTs,MA'],
-            'package' => ['required', 'in:monthly,yearly'],
+            'package' => ['required', 'in:monthly,yearly,biennial'],
         ];
 
         if ($isGuest) {
             $rules['pic_name'] = ['required', 'string', 'max:150'];
             $rules['email'] = ['required', 'email', 'max:150', Rule::unique('users', 'email')];
             $rules['password'] = ['required', 'string', Password::min(8), 'confirmed'];
+            $rules['referral_code'] = ['nullable', 'string', 'max:30'];
         }
 
         $data = $request->validate($rules);
+
+        if ($isGuest && filled($data['referral_code'] ?? null) && ! app(AffiliateService::class)->findActiveByCode($data['referral_code'])) {
+            return response()->json(['message' => 'Kode referral tidak ditemukan. Periksa kembali atau kosongkan kolomnya.'], 422);
+        }
 
         try {
             $result = $prepareService->prepare($data, $user, $isGuest);
@@ -66,10 +71,11 @@ class DeployController extends Controller
     public function checkout(
         Request $request,
         PaymentService $payments,
-        XenditService $xendit,
     ): JsonResponse {
-        if (! $xendit->isConfigured()) {
-            return response()->json(['message' => 'Pembayaran belum dikonfigurasi. Hubungi administrator.'], 503);
+        if (! $payments->gatewayConfigured()) {
+            return response()->json([
+                'message' => 'Pembayaran via '.config('payment.label').' sedang dalam proses aktivasi. Akun & data Anda sudah tersimpan — silakan lanjutkan pembayaran nanti dari dashboard, atau hubungi '.config('company.email').'.',
+            ], 503);
         }
 
         $user = $request->user();
@@ -187,6 +193,9 @@ class DeployController extends Controller
             'instance_id' => $instance?->id,
             'instance_status' => $instance?->status,
             'fqdn' => $instance?->fqdn,
+            'amount' => $payment->meta['pay_amount'] ?? $payment->amount,
+            'payment_label' => $payment->channelLabel(),
+            'checkout_url' => $payment->status === 'pending' ? $payment->invoice_url : null,
         ]);
     }
 

@@ -5,7 +5,6 @@ namespace App\Http\Controllers;
 use App\Models\Payment;
 use App\Services\PaymentService;
 use App\Services\SubscriptionService;
-use App\Services\XenditService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +17,7 @@ class RenewalController extends Controller
     {
         $instance = $payments->instanceForRenewal($subdomain);
 
-        abort_unless($instance, 404, 'RDM tidak ditemukan atau masih aktif.');
+        abort_unless($instance, 404, 'RDM tidak ditemukan.');
 
         $pkg = config('deploy.packages.'.$instance->package);
 
@@ -27,6 +26,8 @@ class RenewalController extends Controller
             'pkg' => $pkg,
             'amount' => $payments->packageAmount($instance),
             'statusLabel' => $subscriptions->statusLabel($instance),
+            'isExpired' => $subscriptions->isExpired($instance),
+            'newExpiresAt' => $subscriptions->expiresAtAfterRenewal($instance),
         ]);
     }
 
@@ -34,7 +35,7 @@ class RenewalController extends Controller
     {
         $instance = $payments->instanceForRenewal($subdomain);
 
-        abort_unless($instance, 404, 'RDM tidak ditemukan atau masih aktif.');
+        abort_unless($instance, 404, 'RDM tidak ditemukan.');
 
         $data = $request->validate([
             'email' => ['nullable', 'email', 'max:150'],
@@ -48,11 +49,11 @@ class RenewalController extends Controller
         return redirect()->route('renewal.checkout', $subdomain);
     }
 
-    public function checkoutForm(string $subdomain, PaymentService $payments, SubscriptionService $subscriptions, XenditService $xendit): View|RedirectResponse
+    public function checkoutForm(string $subdomain, PaymentService $payments, SubscriptionService $subscriptions): View|RedirectResponse
     {
         $instance = $payments->instanceForRenewal($subdomain);
 
-        abort_unless($instance, 404, 'RDM tidak ditemukan atau masih aktif.');
+        abort_unless($instance, 404, 'RDM tidak ditemukan.');
 
         $session = $payments->checkoutSession($subdomain);
 
@@ -65,7 +66,7 @@ class RenewalController extends Controller
         $pkg = config('deploy.packages.'.$instance->package);
         $amount = $payments->packageAmount($instance);
 
-        $xendit->availableChannels(refresh: true);
+        $payments->refreshAvailableChannels();
 
         $methodGroups = $payments->groupedPaymentMethods();
 
@@ -102,7 +103,7 @@ class RenewalController extends Controller
     {
         $instance = $payments->instanceForRenewal($subdomain);
 
-        abort_unless($instance, 404, 'RDM tidak ditemukan atau masih aktif.');
+        abort_unless($instance, 404, 'RDM tidak ditemukan.');
 
         if (! $payments->checkoutSession($subdomain)) {
             return redirect()

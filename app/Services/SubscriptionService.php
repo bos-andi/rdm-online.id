@@ -155,10 +155,9 @@ class SubscriptionService
             throw new \InvalidArgumentException('RDM ini tidak dapat diaktifkan kembali.');
         }
 
+        $stillRunning = $instance->status === 'active' && ! $this->isExpired($instance);
+        $base = $this->renewalBaseDate($instance);
         $days = $this->packagePeriodDays($instance);
-        $base = $instance->expires_at && $instance->expires_at->isFuture()
-            ? $instance->expires_at
-            : now();
 
         $instance->update([
             'status' => 'active',
@@ -169,12 +168,28 @@ class SubscriptionService
             'purge_warning_sent_at' => null,
         ]);
 
+        if ($stillRunning) {
+            return;
+        }
+
         try {
             app(DeployService::class)->restoreInstance($instance);
         } catch (\Throwable $e) {
             Log::warning('Gagal restore RDM '.$instance->fqdn.': '.$e->getMessage());
             throw $e;
         }
+    }
+
+    public function renewalBaseDate(RdmInstance $instance): Carbon
+    {
+        return $instance->expires_at && $instance->expires_at->isFuture()
+            ? $instance->expires_at->copy()
+            : now();
+    }
+
+    public function expiresAtAfterRenewal(RdmInstance $instance): Carbon
+    {
+        return $this->renewalBaseDate($instance)->addDays($this->packagePeriodDays($instance));
     }
 
     public function statusLabel(RdmInstance $instance): string

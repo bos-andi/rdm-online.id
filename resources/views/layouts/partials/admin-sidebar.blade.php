@@ -13,7 +13,7 @@
                 href="{{ route($item['route']) }}"
                 @class([
                     'admin-menu-item w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm',
-                    'active' => request()->routeIs($item['route']),
+                    'active' => request()->routeIs($item['active'] ?? $item['route']),
                 ])
             >
                 <i data-lucide="{{ $item['icon'] }}" class="w-4 h-4"></i>

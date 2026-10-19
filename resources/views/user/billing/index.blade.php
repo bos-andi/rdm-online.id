@@ -54,6 +54,15 @@
                                 Bayar Perpanjang
                             </a>
                         </div>
+                    @elseif ($rdm->status === 'active')
+                        <div class="mt-4 pt-4 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-3">
+                            <p class="text-sm text-muted">
+                                Bisa diperpanjang kapan saja — masa aktif ditambahkan dari tanggal berakhir.
+                            </p>
+                            <a href="{{ route('renewal.show', $rdm->subdomain) }}" class="app-btn-sm rounded font-semibold">
+                                Perpanjang Sekarang
+                            </a>
+                        </div>
                     @endif
                 </div>
             @endforeach

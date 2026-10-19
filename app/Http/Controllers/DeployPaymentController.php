@@ -2,14 +2,14 @@
 
 namespace App\Http\Controllers;
 
-use Illuminate\View\View;
+use Illuminate\Http\RedirectResponse;
 
 class DeployPaymentController extends Controller
 {
-    public function success(): View
+    public function success(): RedirectResponse
     {
-        return view('deploy.payment-success', [
-            'ref' => request()->query('ref'),
-        ]);
+        $ref = request()->query('ref');
+
+        return redirect()->route('deploy', $ref ? ['paid' => $ref] : []);
     }
 }

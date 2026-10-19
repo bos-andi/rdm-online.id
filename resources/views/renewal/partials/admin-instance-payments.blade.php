@@ -22,7 +22,7 @@
                 </p>
                 @if ($payment->status === 'pending' && $payment->invoice_url)
                     <a href="{{ $payment->invoice_url }}" target="_blank" rel="noopener" class="inline-block text-xs text-emerald-700 hover:underline mt-2">
-                        Buka invoice Xendit
+                        Buka invoice {{ $payment->gateway === 'tripay' ? 'Tripay' : 'Xendit' }}
                     </a>
                 @endif
             </div>

@@ -36,6 +36,19 @@
                     <span class="text-gray-600">Masa aktif</span>
                     <span class="font-medium text-gray-800">+{{ $pkg['days'] ?? ($instance->package === 'yearly' ? 365 : 30) }} hari</span>
                 </div>
+                @if ($instance->expires_at)
+                    <div class="flex justify-between gap-4">
+                        <span class="text-gray-600">{{ $isExpired ? 'Berakhir pada' : 'Berakhir saat ini' }}</span>
+                        <span class="font-medium text-gray-800">{{ $instance->expires_at->translatedFormat('d M Y') }}</span>
+                    </div>
+                @endif
+                <div class="flex justify-between gap-4">
+                    <span class="text-gray-600">Berlaku hingga</span>
+                    <span class="font-semibold text-emerald-700">{{ $newExpiresAt->translatedFormat('d M Y') }}</span>
+                </div>
+                @unless ($isExpired)
+                    <p class="text-xs text-emerald-800">Masa aktif ditambahkan dari tanggal berakhir saat ini — sisa hari Anda tidak hilang.</p>
+                @endunless
                 <div class="flex justify-between gap-4 pt-2 border-t border-emerald-100">
                     <span class="text-gray-600">Harga paket</span>
                     <span class="font-medium text-gray-800">Rp{{ number_format($amount, 0, ',', '.') }}</span>
@@ -70,7 +83,7 @@
             </form>
 
             <p class="text-xs text-gray-500 mt-4 text-center">
-                Pembayaran aman melalui Xendit. Mendukung QRIS, e-wallet, virtual account, dan retail outlet.
+                Pembayaran aman melalui {{ config('payment.label') }}. Metode yang tersedia ditampilkan di halaman checkout.
             </p>
         </div>
 

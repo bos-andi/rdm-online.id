@@ -81,6 +81,38 @@
                     <p class="text-rose-600 text-xs mt-1">{{ $message }}</p>
                 @enderror
             </div>
+            <div>
+                <label for="biennial_price" class="block text-sm font-medium text-slate-700 mb-1">Harga 2 Tahunan (Rp)</label>
+                <input
+                    id="biennial_price"
+                    name="biennial_price"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    required
+                    value="{{ old('biennial_price', $packagePrices['biennial']) }}"
+                    class="admin-input"
+                >
+                @error('biennial_price')
+                    <p class="text-rose-600 text-xs mt-1">{{ $message }}</p>
+                @enderror
+            </div>
+            <div>
+                <label for="biennial_original" class="block text-sm font-medium text-slate-700 mb-1">Harga Coretan 2 Tahunan (Rp)</label>
+                <input
+                    id="biennial_original"
+                    name="biennial_original"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    value="{{ old('biennial_original', $biennialOriginal) }}"
+                    class="admin-input"
+                    placeholder="Kosongkan jika tanpa diskon"
+                >
+                @error('biennial_original')
+                    <p class="text-rose-600 text-xs mt-1">{{ $message }}</p>
+                @enderror
+            </div>
             <div class="sm:col-span-2">
                 <label for="promo_ends_at" class="block text-sm font-medium text-slate-700 mb-1">Batas Waktu Promo</label>
                 <input

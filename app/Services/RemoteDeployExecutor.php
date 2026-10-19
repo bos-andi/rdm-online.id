@@ -79,7 +79,38 @@ class RemoteDeployExecutor
         ];
     }
 
-    public function runSsh(VpsServer $server, string $command): string
+    /**
+     * Tes SSH; jika user ditolak, coba user umum lain (ubuntu/root) dan simpan yang berhasil.
+     */
+    public function testConnectionDetectingUser(VpsServer $server): array
+    {
+        $result = $this->testConnection($server);
+
+        if ($result['ok'] || $server->isLocal() || ! str_contains($result['message'], 'menolak koneksi')) {
+            return $result;
+        }
+
+        $original = $server->ssh_user;
+
+        foreach (array_diff(['ubuntu', 'root'], [$original]) as $user) {
+            $server->ssh_user = $user;
+
+            if ($this->runSshProcess($server, 'echo rdm-ssh-ok', 30)['ok']) {
+                $server->save();
+
+                return ['ok' => true, 'message' => 'Koneksi SSH berhasil (user '.$user.').'];
+            }
+        }
+
+        $server->ssh_user = $original;
+
+        return [
+            'ok' => false,
+            'message' => 'VPS menolak koneksi — public key belum terpasang di '.$server->ip_address.' (sudah dicoba user ubuntu & root).',
+        ];
+    }
+
+    public function runSsh(VpsServer $server, string $command, int $timeout = 120, ?string $input = null): string
     {
         if ($server->isLocal()) {
             $process = new Process(['bash', '-lc', $command]);
@@ -97,7 +128,7 @@ class RemoteDeployExecutor
             throw new \RuntimeException('SSH belum siap untuk server '.$server->code.'.');
         }
 
-        $result = $this->runSshProcess($server, $command, 120, retries: 8);
+        $result = $this->runSshProcess($server, $command, $timeout, retries: 8, input: $input);
 
         if (! $result['ok']) {
             throw new \RuntimeException($result['error'] ?: 'SSH gagal.');
@@ -109,7 +140,7 @@ class RemoteDeployExecutor
     /**
      * @return array{ok: bool, error: string, output: string}
      */
-    private function runSshProcess(VpsServer $server, string $remoteCommand, int $timeout, int $retries = 1, bool $openMaster = false): array
+    private function runSshProcess(VpsServer $server, string $remoteCommand, int $timeout, int $retries = 1, bool $openMaster = false, ?string $input = null): array
     {
         $error = '';
 
@@ -117,6 +148,9 @@ class RemoteDeployExecutor
             $command = $this->sshBaseCommand($server, $remoteCommand, $openMaster && $attempt === 1);
             $process = new Process($command);
             $process->setTimeout($timeout);
+            if ($input !== null) {
+                $process->setInput($input);
+            }
             $process->run();
 
             if ($process->isSuccessful()) {

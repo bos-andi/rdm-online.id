@@ -15,6 +15,7 @@ return [
         ['icon' => 'database', 'label' => 'Database Manager', 'route' => 'admin.database'],
         ['icon' => 'hard-drive', 'label' => 'Backup Center', 'route' => 'admin.backup'],
         ['icon' => 'credit-card', 'label' => 'Billing & Pembayaran', 'route' => 'admin.billing'],
+        ['icon' => 'handshake', 'label' => 'Affiliate', 'route' => 'admin.affiliate', 'active' => 'admin.affiliate*'],
         ['icon' => 'life-buoy', 'label' => 'Support Management', 'route' => 'admin.support'],
         ['icon' => 'megaphone', 'label' => 'Pengumuman', 'route' => 'admin.pengumuman'],
         ['icon' => 'settings', 'label' => 'Pengaturan Sistem', 'route' => 'admin.settings'],

@@ -176,3 +176,23 @@
 .admin-btn-danger {
     @apply bg-rose-600 hover:bg-rose-700 text-white transition-colors;
 }
+
+.legal-content {
+    @apply text-gray-700 leading-relaxed space-y-4;
+}
+
+.legal-content h2 {
+    @apply text-xl font-semibold text-emerald-950 pt-4;
+}
+
+.legal-content ul {
+    @apply list-disc pl-6 space-y-1.5;
+}
+
+.legal-content ol {
+    @apply list-decimal pl-6 space-y-1.5;
+}
+
+.legal-content a:not(.landing-btn-primary) {
+    @apply text-emerald-700 underline underline-offset-2 hover:text-emerald-800;
+}

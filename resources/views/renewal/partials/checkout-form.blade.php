@@ -44,7 +44,7 @@
             <input type="hidden" name="email" value="{{ old('email', $email) }}">
 
             <h2 class="text-sm font-semibold text-gray-800 mb-1">Pilih metode pembayaran</h2>
-            <p class="text-xs text-gray-500 mb-4">Biaya admin bervariasi per metode · diproses aman melalui Xendit</p>
+            <p class="text-xs text-gray-500 mb-4">Biaya admin bervariasi per metode · diproses aman melalui {{ config('payment.label') }}</p>
 
             <div class="space-y-6">
                 @foreach ($methodGroups as $group => $methods)
@@ -97,5 +97,5 @@
 </div>
 
 <p class="text-center text-gray-400 text-xs mt-4">
-    Total bayar = harga paket + biaya admin metode yang dipilih. Setelah klik Bayar, Anda diarahkan ke Xendit.
+    Total bayar = harga paket + biaya admin metode yang dipilih. Setelah klik Bayar, QRIS/VA tampil langsung atau Anda diarahkan ke halaman pembayaran {{ config('payment.label') }}.
 </p>

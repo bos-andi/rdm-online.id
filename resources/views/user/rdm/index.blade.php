@@ -59,7 +59,7 @@
                                     <a href="https://{{ $rdm->fqdn }}" target="_blank" rel="noopener" class="app-btn-sm rounded">Buka</a>
                                 @elseif ($rdm->canResumePayment())
                                     <a
-                                        href="{{ route('deploy', ['resume' => $rdm->id]) }}"
+                                        href="{{ route('user.deploy', ['resume' => $rdm->id]) }}"
                                         class="app-btn-sm rounded bg-amber-500 hover:bg-amber-600 text-white"
                                     >
                                         Lanjutkan Pembayaran

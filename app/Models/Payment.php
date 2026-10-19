@@ -10,7 +10,9 @@ class Payment extends Model
     protected $fillable = [
         'rdm_instance_id',
         'external_id',
+        'gateway',
         'xendit_invoice_id',
+        'gateway_reference',
         'amount',
         'package',
         'payment_channel',
@@ -59,7 +61,7 @@ class Payment extends Model
             return '—';
         }
 
-        return config('xendit.methods.'.$this->payment_channel.'.label')
+        return config(($this->gateway ?: 'xendit').'.methods.'.$this->payment_channel.'.label')
             ?? strtoupper(str_replace('_', ' ', $this->payment_channel));
     }
 

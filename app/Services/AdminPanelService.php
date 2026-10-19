@@ -160,7 +160,7 @@ class AdminPanelService
                 && now()->diffInDays($instance->expires_at) <= 7;
         })->count();
 
-        $xenditChannels = app(\App\Services\XenditService::class)->availableChannels();
+        $gatewayChannels = app(\App\Services\PaymentService::class)->gatewayChannelSummary();
 
         return [
             'pending' => $deploying->count() + $failed->count() + $expiringSoon,
@@ -173,7 +173,7 @@ class AdminPanelService
             'byPackage' => $active->groupBy('package')->map->count(),
             'instances' => $instances->sortByDesc('deployed_at'),
             'payments' => $payments,
-            'xenditChannels' => $xenditChannels,
+            'gatewayChannels' => $gatewayChannels,
         ];
     }
 

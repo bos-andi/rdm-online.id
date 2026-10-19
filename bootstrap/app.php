@@ -12,15 +12,24 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->redirectGuestsTo(fn () => route('user.login'));
+        $middleware->redirectGuestsTo(fn (Request $request) => $request->is('affiliate', 'affiliate/*')
+            ? route('affiliate.login')
+            : route('user.login'));
+
+        $middleware->web(append: [
+            \App\Http\Middleware\CaptureAffiliateReferral::class,
+        ]);
 
         $middleware->alias([
             'admin.auth' => \App\Http\Middleware\EnsureAdminAuthenticated::class,
             'subscription.active' => \App\Http\Middleware\EnsureActiveSubscription::class,
+            'affiliate.active' => \App\Http\Middleware\EnsureAffiliateActive::class,
+            'affiliate.verified' => \App\Http\Middleware\EnsureAffiliateEmailVerified::class,
         ]);
 
         $middleware->validateCsrfTokens(except: [
             'webhooks/xendit/*',
+            'webhooks/tripay/*',
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

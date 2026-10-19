@@ -48,7 +48,7 @@ class PageController extends Controller
         }
 
         return redirect()
-            ->route('deploy', ['monitor' => $rdmInstance->id])
+            ->route('user.deploy', ['monitor' => $rdmInstance->id])
             ->with('status', 'Deploy dijalankan ulang. Pembayaran Anda tetap berlaku.');
     }
 

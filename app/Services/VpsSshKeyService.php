@@ -30,6 +30,29 @@ class VpsSshKeyService
         $this->storeKeyPair($server, $privateKey, $publicKey, $keyName);
     }
 
+    public function sharedKeyPath(): ?string
+    {
+        $path = config('deploy.ssh.shared_private_key_path');
+
+        return $path && is_readable($path) ? $path : null;
+    }
+
+    public function sharedKeyLabel(): string
+    {
+        return (string) config('deploy.ssh.shared_key_label', 'apanel');
+    }
+
+    public function useSharedKey(VpsServer $server): void
+    {
+        $path = $this->sharedKeyPath();
+
+        if (! $path) {
+            throw new \RuntimeException('SSH key '.$this->sharedKeyLabel().' tidak ditemukan / tidak bisa dibaca di server panel.');
+        }
+
+        $this->storeFromPrivateKey($server, file_get_contents($path), $this->sharedKeyLabel());
+    }
+
     public function storeKeyPair(VpsServer $server, string $privateKey, string $publicKey, ?string $keyName = null): void
     {
         $server->update([

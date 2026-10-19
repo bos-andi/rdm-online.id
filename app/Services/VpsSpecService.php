@@ -18,10 +18,16 @@ class VpsSpecService
             return false;
         }
 
-        $server->update([
+        $changes = [
             'vcpu' => $specs['vcpu'],
             'ram_gb' => $specs['ram_gb'],
-        ]);
+        ];
+
+        if ($server->max_rdm_capacity <= 0 && $specs['ram_gb'] > 0) {
+            $changes['max_rdm_capacity'] = max(10, $specs['ram_gb'] * 25);
+        }
+
+        $server->update($changes);
 
         return true;
     }

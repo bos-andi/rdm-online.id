@@ -26,7 +26,7 @@
             </p>
         </div>
         <a
-            href="https://wa.me/628123456789"
+            href="https://wa.me/{{ config('company.whatsapp') }}"
             target="_blank"
             rel="noopener noreferrer"
             class="block w-full app-btn rounded-xl p-4 text-center font-semibold"

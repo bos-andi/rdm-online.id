@@ -13,6 +13,8 @@ return [
 
     'ssh' => [
         'private_key_path' => env('DEPLOY_SSH_PRIVATE_KEY', storage_path('deploy/keys/rdm-deploy')),
+        'shared_private_key_path' => env('DEPLOY_SHARED_SSH_KEY'),
+        'shared_key_label' => env('DEPLOY_SHARED_SSH_KEY_LABEL', 'apanel'),
     ],
 
     'remote' => [
@@ -31,6 +33,7 @@ return [
     'packages' => [
         'monthly' => ['label' => 'Bulanan', 'price' => 15000, 'period' => 'bulan', 'days' => 30],
         'yearly' => ['label' => 'Tahunan', 'price' => 50000, 'period' => 'tahun', 'days' => 365],
+        'biennial' => ['label' => '2 Tahunan', 'price' => 200000, 'period' => '2 tahun', 'days' => 730],
     ],
 
     'pending_payment_ttl_hours' => (int) env('DEPLOY_PENDING_PAYMENT_TTL_HOURS', 24),

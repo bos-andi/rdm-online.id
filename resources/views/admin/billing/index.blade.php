@@ -3,7 +3,7 @@
 @section('title', 'Billing & Pembayaran')
 
 @section('content')
-    <x-admin.page-header title="Billing & Pembayaran" subtitle="Transaksi Xendit dan langganan RDM" />
+    <x-admin.page-header title="Billing & Pembayaran" subtitle="Transaksi {{ config('payment.label') }} dan langganan RDM" />
 
     <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
         <div class="admin-stat-card">
@@ -32,7 +32,7 @@
         <div class="lg:col-span-2 admin-card overflow-hidden">
             <div class="admin-card-header px-4 py-3 font-semibold text-slate-700 flex items-center justify-between">
                 <span>Riwayat Pembayaran</span>
-                <span class="text-xs font-normal text-slate-400">via Xendit</span>
+                <span class="text-xs font-normal text-slate-400">via {{ config('payment.label') }}</span>
             </div>
             <div class="overflow-x-auto">
                 <table class="w-full text-sm">
@@ -95,40 +95,22 @@
 
         <div class="space-y-6">
             <div class="admin-card p-5">
-                <h3 class="font-semibold text-slate-900 mb-3">Metode Xendit Aktif</h3>
-                @if (! empty($xenditChannels['synced_at']))
-                    <p class="text-xs text-slate-400 mb-3">Sync {{ \Illuminate\Support\Carbon::parse($xenditChannels['synced_at'])->diffForHumans() }}</p>
+                <h3 class="font-semibold text-slate-900 mb-3">Metode {{ config('payment.label') }} Aktif</h3>
+                @if (! empty($gatewayChannels['synced_at']))
+                    <p class="text-xs text-slate-400 mb-3">Sync {{ \Illuminate\Support\Carbon::parse($gatewayChannels['synced_at'])->diffForHumans() }}</p>
+                @endif
+                @if (! empty($gatewayChannels['error']))
+                    <p class="text-xs text-rose-600 mb-3">Gagal sync: {{ $gatewayChannels['error'] }}</p>
                 @endif
                 <div class="space-y-3 text-sm">
-                    @if (! empty($xenditChannels['qr']))
+                    @forelse ($gatewayChannels['groups'] ?? [] as $group => $channels)
                         <div>
-                            <p class="text-xs font-semibold uppercase text-slate-500 mb-1">QRIS</p>
-                            <p class="text-slate-700">{{ implode(', ', $xenditChannels['qr']) }}</p>
+                            <p class="text-xs font-semibold uppercase text-slate-500 mb-1">{{ $group }}</p>
+                            <p class="text-slate-700">{{ implode(', ', $channels) }}</p>
                         </div>
-                    @endif
-                    @if (! empty($xenditChannels['banks']))
-                        <div>
-                            <p class="text-xs font-semibold uppercase text-slate-500 mb-1">Virtual Account</p>
-                            <p class="text-slate-700">{{ implode(', ', $xenditChannels['banks']) }}</p>
-                        </div>
-                    @endif
-                    @if (! empty($xenditChannels['ewallets']))
-                        <div>
-                            <p class="text-xs font-semibold uppercase text-slate-500 mb-1">E-Wallet</p>
-                            <p class="text-slate-700">{{ implode(', ', $xenditChannels['ewallets']) }}</p>
-                        </div>
-                    @else
-                        <div>
-                            <p class="text-xs font-semibold uppercase text-slate-500 mb-1">E-Wallet</p>
-                            <p class="text-slate-400">Belum diaktifkan</p>
-                        </div>
-                    @endif
-                    @if (! empty($xenditChannels['retail']))
-                        <div>
-                            <p class="text-xs font-semibold uppercase text-slate-500 mb-1">Retail</p>
-                            <p class="text-slate-700">{{ implode(', ', $xenditChannels['retail']) }}</p>
-                        </div>
-                    @endif
+                    @empty
+                        <p class="text-slate-400">Belum ada channel aktif.</p>
+                    @endforelse
                 </div>
             </div>
 

@@ -8,6 +8,13 @@ use Illuminate\Support\Facades\Schema;
 
 class PackagePricingService
 {
+    public const PACKAGES = ['monthly', 'yearly', 'biennial'];
+
+    private const ORIGINAL_PRICE_FALLBACKS = [
+        'yearly' => 100000,
+        'biennial' => 500000,
+    ];
+
     public function monthlyPrice(): int
     {
         return $this->priceFor('monthly');
@@ -16,6 +23,11 @@ class PackagePricingService
     public function yearlyPrice(): int
     {
         return $this->priceFor('yearly');
+    }
+
+    public function biennialPrice(): int
+    {
+        return $this->priceFor('biennial');
     }
 
     public function priceFor(string $package): int
@@ -27,7 +39,7 @@ class PackagePricingService
 
     public function originalPriceFor(string $package): ?int
     {
-        $fallback = $package === 'yearly' ? 100000 : null;
+        $fallback = self::ORIGINAL_PRICE_FALLBACKS[$package] ?? null;
         $value = $this->nullableIntSetting('packages.'.$package.'.original_price', $fallback);
 
         if ($value === null || $value <= $this->priceFor($package)) {
@@ -69,16 +81,22 @@ class PackagePricingService
 
     public function hasAnyDiscount(): bool
     {
-        return $this->originalPriceFor('monthly') !== null
-            || $this->originalPriceFor('yearly') !== null;
+        foreach (self::PACKAGES as $package) {
+            if ($this->originalPriceFor($package) !== null) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
-    /** @return array{monthly: int, yearly: int} */
+    /** @return array{monthly: int, yearly: int, biennial: int} */
     public function prices(): array
     {
         return [
             'monthly' => $this->monthlyPrice(),
             'yearly' => $this->yearlyPrice(),
+            'biennial' => $this->biennialPrice(),
         ];
     }
 
@@ -86,8 +104,10 @@ class PackagePricingService
      * @return array{
      *     monthly: int,
      *     yearly: int,
+     *     biennial: int,
      *     monthly_original: ?int,
      *     yearly_original: ?int,
+     *     biennial_original: ?int,
      *     promo_ends_at: ?string,
      *     promo_active: bool
      * }
@@ -101,8 +121,10 @@ class PackagePricingService
         return [
             'monthly' => $this->monthlyPrice(),
             'yearly' => $this->yearlyPrice(),
+            'biennial' => $this->biennialPrice(),
             'monthly_original' => $promoActive ? $this->originalPriceFor('monthly') : null,
             'yearly_original' => $promoActive ? $this->originalPriceFor('yearly') : null,
+            'biennial_original' => $promoActive ? $this->originalPriceFor('biennial') : null,
             'promo_ends_at' => $this->promoEndsAt()?->toIso8601String(),
             'promo_active' => $promoActive,
         ];
@@ -122,23 +144,26 @@ class PackagePricingService
         Setting::setValue('packages.promo_ends_at', now()->addDays(14)->format('Y-m-d H:i:s'));
     }
 
-    public function update(
-        int $monthly,
-        int $yearly,
-        ?int $monthlyOriginal,
-        ?int $yearlyOriginal,
-        ?string $promoEndsAt,
-    ): void {
-        Setting::setValue('packages.monthly.price', $monthly);
-        Setting::setValue('packages.yearly.price', $yearly);
-        Setting::setValue(
-            'packages.monthly.original_price',
-            $monthlyOriginal !== null && $monthlyOriginal > 0 ? $monthlyOriginal : null,
-        );
-        Setting::setValue(
-            'packages.yearly.original_price',
-            $yearlyOriginal !== null && $yearlyOriginal > 0 ? $yearlyOriginal : null,
-        );
+    /**
+     * @param  array<string, int>  $prices  keyed by package code
+     * @param  array<string, ?int>  $originals  keyed by package code
+     */
+    public function update(array $prices, array $originals, ?string $promoEndsAt): void
+    {
+        foreach (self::PACKAGES as $package) {
+            if (array_key_exists($package, $prices)) {
+                Setting::setValue('packages.'.$package.'.price', max(0, (int) $prices[$package]));
+            }
+
+            if (array_key_exists($package, $originals)) {
+                $original = $originals[$package];
+                Setting::setValue(
+                    'packages.'.$package.'.original_price',
+                    $original !== null && $original > 0 ? $original : null,
+                );
+            }
+        }
+
         Setting::setValue('packages.promo_ends_at', $promoEndsAt ?: null);
         $this->applyToConfig();
     }
@@ -149,7 +174,7 @@ class PackagePricingService
             return;
         }
 
-        foreach (['monthly', 'yearly'] as $package) {
+        foreach (self::PACKAGES as $package) {
             $stored = Setting::getValue('packages.'.$package.'.price');
 
             if ($stored === null || $stored === '') {

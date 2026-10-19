@@ -14,18 +14,22 @@ class PricingSettingsController extends Controller
         $data = $request->validate([
             'monthly_price' => ['required', 'integer', 'min:0'],
             'yearly_price' => ['required', 'integer', 'min:0'],
+            'biennial_price' => ['required', 'integer', 'min:0'],
             'monthly_original' => ['nullable', 'integer', 'min:0'],
             'yearly_original' => ['nullable', 'integer', 'min:0'],
+            'biennial_original' => ['nullable', 'integer', 'min:0'],
             'promo_ends_at' => ['nullable', 'date'],
         ]);
 
-        $pricing->update(
-            (int) $data['monthly_price'],
-            (int) $data['yearly_price'],
-            isset($data['monthly_original']) ? (int) $data['monthly_original'] : null,
-            isset($data['yearly_original']) ? (int) $data['yearly_original'] : null,
-            $data['promo_ends_at'] ?? null,
-        );
+        $prices = [];
+        $originals = [];
+
+        foreach (PackagePricingService::PACKAGES as $package) {
+            $prices[$package] = (int) $data[$package.'_price'];
+            $originals[$package] = isset($data[$package.'_original']) ? (int) $data[$package.'_original'] : null;
+        }
+
+        $pricing->update($prices, $originals, $data['promo_ends_at'] ?? null);
 
         return back()->with('status', 'Harga paket berhasil disimpan.');
     }

@@ -109,6 +109,7 @@ class PageController extends Controller
             'promoEndsAt' => $pricing->promoEndsAt(),
             'monthlyOriginal' => $pricing->originalPriceFor('monthly'),
             'yearlyOriginal' => $pricing->originalPriceFor('yearly'),
+            'biennialOriginal' => $pricing->originalPriceFor('biennial'),
         ]);
     }
 

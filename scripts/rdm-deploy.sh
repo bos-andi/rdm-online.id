@@ -9,15 +9,46 @@ DB_PASS="${5:-}"
 DEPLOY_PATH="${6:-}"
 SOURCE_ZIP="${7:-}"
 CERTBOT_EMAIL="${8:-}"
-SQL_TEMPLATE="${9:-${DEPLOY_SQL_TEMPLATE:-/var/www/rdm-online.id/storage/deploy/rdm-base.sql}}"
+SQL_TEMPLATE="${9:-${DEPLOY_SQL_TEMPLATE:-/var/www/rdm-online/rdm-online.id/storage/deploy/rdm-base.sql}}"
 
 DOMAIN="rdm-online.id"
+BASE_PATH="/var/www/rdm-online"
 FQDN="${SUBDOMAIN}.${DOMAIN}"
 NGINX_AVAILABLE="/etc/nginx/sites-available/${FQDN}"
 NGINX_ENABLED="/etc/nginx/sites-enabled/${FQDN}"
 PHP_FPM_SOCKET="${DEPLOY_PHP_FPM_SOCKET:-/run/php/php7.4-fpm.sock}"
 
 log() { echo "[rdm-deploy] $*"; }
+die() { echo "[rdm-deploy] $*" >&2; exit 1; }
+
+# Dijalankan sebagai root via sudo oleh www-data, jadi semua argumen wajib divalidasi.
+validate_args() {
+    [[ "$ACTION" =~ ^(extract|database|import|config|nginx|ssl|suspend|restore|destroy)$ ]] || die "Unknown action: ${ACTION}"
+    [[ "$SUBDOMAIN" =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "Subdomain tidak valid: ${SUBDOMAIN}"
+    if [[ -n "$DEPLOY_PATH" && "$DEPLOY_PATH" != "${BASE_PATH}/${SUBDOMAIN}" ]]; then
+        die "Deploy path harus ${BASE_PATH}/${SUBDOMAIN}"
+    fi
+    [[ -L "${BASE_PATH}/${SUBDOMAIN}" ]] && die "Deploy path tidak boleh symlink"
+    if [[ -n "$DB_NAME" && ! "$DB_NAME" =~ ^rdm_[a-z0-9_]{1,60}$ ]]; then die "Nama database tidak valid"; fi
+    if [[ -n "$DB_USER" && ! "$DB_USER" =~ ^rdm_[a-z0-9_]{1,28}$ ]]; then die "User database tidak valid"; fi
+    if [[ -n "$DB_PASS" && ! "$DB_PASS" =~ ^[A-Za-z0-9]{12,128}$ ]]; then die "Password database tidak valid"; fi
+    if [[ -n "$CERTBOT_EMAIL" && ! "$CERTBOT_EMAIL" =~ ^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]]; then die "Email certbot tidak valid"; fi
+    if [[ "$ACTION" == "extract" ]]; then
+        [[ "$SOURCE_ZIP" == *.zip && -f "$SOURCE_ZIP" ]] || die "Source zip tidak ditemukan: ${SOURCE_ZIP}"
+    fi
+}
+
+ensure_fqdn_not_used_elsewhere() {
+    local f
+    for f in /etc/nginx/sites-enabled/*; do
+        [[ "$(basename "$f")" == "${FQDN}" ]] && continue
+        if grep -Eq "^[[:space:]]*server_name[^;]*[[:space:]]${FQDN//./\\.}([[:space:];]|$)" "$f"; then
+            die "Domain ${FQDN} sudah dipakai situs lain di server ini."
+        fi
+    done
+}
+
+validate_args
 
 require_args() {
     if [[ -z "$SUBDOMAIN" || -z "$DEPLOY_PATH" ]]; then
@@ -69,7 +100,11 @@ action_import() {
     fi
 
     log "Importing RDM schema into ${DB_NAME} from ${sql_template}"
-    mysql "${DB_NAME}" < "${sql_template}"
+    if [[ -n "$DB_USER" && -n "$DB_PASS" ]]; then
+        MYSQL_PWD="${DB_PASS}" mysql -h localhost -u "${DB_USER}" "${DB_NAME}" < "${sql_template}"
+    else
+        die "Import membutuhkan user & password database instance"
+    fi
 }
 
 action_config() {
@@ -98,6 +133,7 @@ EOF
 action_nginx() {
     require_args
     log "Creating nginx config for ${FQDN}"
+    ensure_fqdn_not_used_elsewhere
     cat > "${NGINX_AVAILABLE}" <<EOF
 server {
     listen 80;
@@ -138,8 +174,9 @@ action_ssl() {
 
 action_suspend() {
     require_args
-    local suspended_root="${SUSPENDED_ROOT:-/var/www/rdm-online.id/storage/deploy/suspended}"
+    local suspended_root="${SUSPENDED_ROOT:-/var/www/rdm-online/rdm-online.id/storage/deploy/suspended}"
     log "Suspending ${FQDN}"
+    ensure_fqdn_not_used_elsewhere
 
     if [[ -f "/etc/letsencrypt/live/${FQDN}/fullchain.pem" ]]; then
         cat > "${NGINX_AVAILABLE}" <<EOF

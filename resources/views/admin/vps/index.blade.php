@@ -3,6 +3,10 @@
 @section('title', 'Server VPS')
 
 @section('content')
+    @php
+        $sshKeyService = app(\App\Services\VpsSshKeyService::class);
+        $sharedKey = $sshKeyService->sharedKeyPath() ? $sshKeyService->sharedKeyLabel() : null;
+    @endphp
     <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
         <div>
             <h2 class="text-2xl font-bold text-slate-900">Manajemen Server VPS</h2>
@@ -51,10 +55,14 @@
     <div class="admin-card p-4 mb-6 text-sm text-slate-600 border-amber-100 bg-amber-50/50">
         <p class="font-medium text-slate-800 mb-1">Cara hubungkan VPS remote</p>
         <ol class="list-decimal list-inside space-y-1">
-            <li>Tambah server → centang <strong>Buat SSH key otomatis</strong></li>
-            <li><strong>Salin public key</strong> yang muncul → paste di portal Biznet (Add SSH Key)</li>
-            <li>Buat VPS & pilih key tersebut, lalu bootstrap di VPS (<code class="text-xs bg-white px-1 rounded">rdm-remote-bootstrap.sh</code>)</li>
-            <li>Klik <strong>Tes SSH</strong> → <strong>Sync Deploy</strong> → <strong>Aktifkan untuk Deploy</strong></li>
+            <li>Buat VPS Ubuntu 22.04 / 24.04, lalu klik <strong>Tambah Server VPS</strong> — cukup isi IP Address</li>
+            <li>Pasang public key di VPS: paste di portal provider (Add SSH Key), atau klik <strong>Salin perintah Console</strong> lalu jalankan di Console VPS
+                @if ($sharedKey)
+                    — <strong>lewati</strong> jika memakai SSH key {{ $sharedKey }} dan VPS sudah terdaftar di {{ $sharedKey }}
+                @endif
+            </li>
+            <li>Klik <strong>Setup Otomatis</strong> — panel memasang Nginx, MySQL, PHP 7.4, ionCube, firewall & Sync Deploy (± 5–10 menit)</li>
+            <li>Setelah selesai, klik <strong>Aktifkan untuk Deploy</strong></li>
         </ol>
     </div>
 
@@ -135,6 +143,13 @@
                 <div class="mt-4 flex flex-wrap gap-2">
                     @unless ($vps['is_local'])
                         <button type="button"
+                            class="start-vps-setup admin-btn text-xs px-3 py-1.5 rounded-lg font-semibold"
+                            data-setup-url="{{ route('admin.vps.setup', $vps['id']) }}"
+                            data-status-url="{{ route('admin.vps.setup-status', $vps['id']) }}"
+                            data-label="{{ $vps['name'] }} • {{ $vps['ip'] }}">
+                            Setup Otomatis
+                        </button>
+                        <button type="button"
                             class="open-ssh-modal text-xs px-3 py-1.5 rounded-lg border border-slate-200 text-slate-700 hover:bg-slate-50"
                             data-id="{{ $vps['id'] }}"
                             data-code="{{ $vps['name'] }}"
@@ -211,71 +226,85 @@
                     @csrf
 
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Kode Server</label>
-                        <input name="code" value="{{ old('code') }}" required class="admin-input uppercase" placeholder="ID-02">
-                        @error('code')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
+                        <label class="block text-sm font-medium text-slate-700 mb-1">IP Address VPS</label>
+                        <input name="ip_address" value="{{ old('ip_address') }}" required autofocus class="admin-input" placeholder="203.0.113.10">
+                        @error('ip_address')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
                     </div>
 
-                    <div class="grid grid-cols-2 gap-3">
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Lokasi</label>
-                            <input name="location" value="{{ old('location') }}" required class="admin-input" placeholder="Jakarta">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">IP Address</label>
-                            <input name="ip_address" value="{{ old('ip_address') }}" required class="admin-input" placeholder="203.0.113.10">
-                        </div>
+                    <div class="p-3 rounded-xl bg-slate-50 border border-slate-100 text-xs text-slate-500 space-y-1">
+                        <p>Kode server, lokasi, user SSH (ubuntu/root), vCPU, RAM & kapasitas RDM <strong>terdeteksi otomatis</strong>.</p>
+                        @if ($sharedKey)
+                            <p>Memakai <strong>SSH key {{ $sharedKey }}</strong> — VPS yang sudah terdaftar di {{ $sharedKey }} tidak perlu pasang key lagi.</p>
+                        @else
+                            <p>SSH key dibuat otomatis — public key ditampilkan di kartu server setelah simpan.</p>
+                        @endif
                     </div>
 
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Max RDM</label>
-                        <input name="max_rdm_capacity" type="number" min="1" value="{{ old('max_rdm_capacity', 50) }}" required class="admin-input">
-                        <p class="text-xs text-slate-400 mt-1">vCPU & RAM terdeteksi otomatis setelah Tes SSH</p>
-                    </div>
+                    <details class="rounded-xl border border-slate-100 p-3" @if ($errors->hasAny(['code', 'location', 'max_rdm_capacity', 'ssh_private_key'])) open @endif>
+                        <summary class="text-sm font-medium text-slate-700 cursor-pointer">Pengaturan lanjutan (opsional)</summary>
 
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Path Deploy RDM</label>
-                        <input name="deploy_base_path" value="{{ old('deploy_base_path', '/var/www/rdm-online') }}" class="admin-input">
-                    </div>
-
-                    <div class="border-t border-slate-100 pt-4 space-y-3">
-                        <p class="text-sm font-medium text-slate-800">SSH Key</p>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Nama Key</label>
-                            <input name="ssh_key_name" value="{{ old('ssh_key_name') }}" class="admin-input" placeholder="biznet-neo-lite">
-                            <p class="text-xs text-slate-400 mt-1">Label untuk portal Biznet / referensi Anda</p>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">SSH User</label>
-                                <input name="ssh_user" value="{{ old('ssh_user', 'root') }}" class="admin-input">
+                        <div class="space-y-3 mt-3">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Kode Server</label>
+                                    <input name="code" value="{{ old('code') }}" class="admin-input uppercase" placeholder="Otomatis">
+                                    @error('code')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Lokasi</label>
+                                    <input name="location" value="{{ old('location') }}" class="admin-input" placeholder="Otomatis dari IP">
+                                </div>
                             </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Max RDM</label>
+                                    <input name="max_rdm_capacity" type="number" min="1" value="{{ old('max_rdm_capacity') }}" class="admin-input" placeholder="Otomatis (25/GB RAM)">
+                                    @error('max_rdm_capacity')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">SSH Port</label>
+                                    <input name="ssh_port" type="number" value="{{ old('ssh_port', 22) }}" class="admin-input">
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">SSH User</label>
+                                    <input name="ssh_user" value="{{ old('ssh_user') }}" class="admin-input" placeholder="Otomatis">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-slate-700 mb-1">Path Deploy RDM</label>
+                                    <input name="deploy_base_path" value="{{ old('deploy_base_path', '/var/www/rdm-online') }}" class="admin-input">
+                                </div>
+                            </div>
+
+                            <div class="space-y-2">
+                                <p class="text-sm font-medium text-slate-700">SSH Key</p>
+                                @if ($sharedKey)
+                                    <label class="flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+                                        <input type="radio" name="ssh_key_mode" value="shared" class="mt-1" {{ old('ssh_key_mode', 'shared') === 'shared' ? 'checked' : '' }}>
+                                        <span>Pakai SSH key {{ $sharedKey }}</span>
+                                    </label>
+                                @endif
+                                <label class="flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+                                    <input type="radio" name="ssh_key_mode" value="generate" class="mt-1" {{ old('ssh_key_mode', $sharedKey ? 'shared' : 'generate') === 'generate' ? 'checked' : '' }}>
+                                    <span>Buat key baru khusus server ini</span>
+                                </label>
+                                <label class="flex items-start gap-2 text-sm text-slate-700 cursor-pointer">
+                                    <input type="radio" name="ssh_key_mode" value="paste" class="mt-1" {{ old('ssh_key_mode') === 'paste' ? 'checked' : '' }}>
+                                    <span>Paste private key sendiri</span>
+                                </label>
+                                <textarea name="ssh_private_key" rows="3" class="admin-input font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY----- (hanya untuk opsi paste)">{{ old('ssh_private_key') }}</textarea>
+                                @error('ssh_private_key')<p class="text-rose-600 text-xs mt-1">{{ $message }}</p>@enderror
+                            </div>
+
                             <div>
-                                <label class="block text-sm font-medium text-slate-700 mb-1">SSH Port</label>
-                                <input name="ssh_port" type="number" value="{{ old('ssh_port', 22) }}" class="admin-input">
+                                <label class="block text-sm font-medium text-slate-700 mb-1">Catatan</label>
+                                <textarea name="notes" rows="2" class="admin-input" placeholder="Opsional">{{ old('notes') }}</textarea>
                             </div>
                         </div>
-                        <label class="flex items-start gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100 cursor-pointer">
-                            <input type="checkbox" name="generate_ssh_key" value="1" class="mt-1 rounded border-slate-300" {{ old('generate_ssh_key', '1') ? 'checked' : '' }}>
-                            <span class="text-sm text-slate-700">
-                                <strong>Buat SSH key otomatis</strong> — public key ditampilkan setelah simpan, paste ke Biznet
-                            </span>
-                        </label>
-                        <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1">Atau paste Private Key</label>
-                            <textarea name="ssh_private_key" rows="4" class="admin-input font-mono text-xs" placeholder="-----BEGIN OPENSSH PRIVATE KEY-----&#10;...">{{ old('ssh_private_key') }}</textarea>
-                            <p class="text-xs text-slate-400 mt-1">Opsional jika key sudah ada. Public key dihitung otomatis.</p>
-                        </div>
-                    </div>
-
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1">Catatan</label>
-                        <textarea name="notes" rows="2" class="admin-input" placeholder="Opsional">{{ old('notes') }}</textarea>
-                    </div>
-
-                    <p class="text-xs text-slate-500 p-3 rounded-xl bg-slate-50 border border-slate-100">
-                        Setelah SSH & Sync selesai, klik <strong>Aktifkan untuk Deploy</strong> di kartu server agar pelanggan baru deploy ke VPS ini.
-                    </p>
+                    </details>
 
                     <div class="flex gap-3 pt-2">
                         <button type="button" id="cancel-vps-modal" class="flex-1 py-2.5 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50">Batal</button>
@@ -326,6 +355,12 @@
                             <input name="ssh_port" id="ssh-port" type="number" required class="admin-input" value="22">
                         </div>
                     </div>
+                    @if ($sharedKey)
+                        <label class="flex items-start gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-200 cursor-pointer">
+                            <input type="checkbox" name="use_shared_ssh_key" value="1" class="mt-1 rounded border-slate-300">
+                            <span class="text-sm text-slate-700"><strong>Pakai SSH key {{ $sharedKey }}</strong> (key yang sama dengan {{ $sharedKey }})</span>
+                        </label>
+                    @endif
                     <label class="flex items-start gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100 cursor-pointer">
                         <input type="checkbox" name="generate_ssh_key" value="1" class="mt-1 rounded border-slate-300">
                         <span class="text-sm text-slate-700"><strong>Ganti dengan key baru</strong></span>
@@ -343,6 +378,16 @@
             </div>
         </div>
     </div>
+
+    <x-deploy-progress-modal
+        id="vps-setup-modal"
+        title="Setup Server VPS"
+        subtitle="Panel sedang menyiapkan VPS lewat SSH (± 5–10 menit). Pop-up boleh ditutup, proses tetap berjalan."
+        done-message="Server siap dipakai. Klik Aktifkan untuk Deploy pada kartu server agar pelanggan baru deploy ke VPS ini."
+        :show-open-link="false"
+        :dashboard-url="route('admin.vps')"
+        dashboard-label="Tutup & muat ulang halaman"
+    />
 @endsection
 
 @push('scripts')
@@ -415,7 +460,139 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('cancel-ssh-modal')?.addEventListener('click', closeSsh);
     document.getElementById('ssh-modal-backdrop')?.addEventListener('click', closeSsh);
 
-    @if ($errors->any() || old('code'))
+    const setupModal = document.getElementById('vps-setup-modal');
+    const setupEl = (name) => setupModal.querySelector(`[data-progress-${name}]`);
+    const setupLogs = document.createElement('div');
+    setupLogs.className = 'hidden mt-4 p-3 rounded-xl bg-slate-50 border border-slate-100 font-mono text-xs text-slate-500 max-h-48 overflow-y-auto';
+    setupEl('steps').after(setupLogs);
+    let setupTimer = null;
+
+    const escapeHtml = (text) => String(text ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const spinner = '<svg class="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" opacity=".25"/><path d="M22 12a10 10 0 0 0-10-10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>';
+    const stepView = {
+        completed: ['text-emerald-600', '<span class="w-4 text-center">✓</span>'],
+        running: ['text-amber-500', spinner],
+        failed: ['text-rose-600', '<span class="w-4 text-center">✕</span>'],
+        pending: ['text-gray-300', '<span class="w-4 text-center">○</span>'],
+    };
+
+    const stopSetupPoll = () => { if (setupTimer) clearInterval(setupTimer); setupTimer = null; };
+
+    const resetSetup = (label) => {
+        setupEl('pct').textContent = '0%';
+        setupEl('ring').style.strokeDashoffset = '213.6';
+        setupEl('label').textContent = 'Memulai...';
+        setupEl('fqdn').textContent = label || '';
+        setupEl('steps').innerHTML = '';
+        setupEl('done').classList.add('hidden');
+        setupEl('error').classList.add('hidden');
+        setupLogs.classList.add('hidden');
+        setupLogs.innerHTML = '';
+    };
+
+    const showSetupError = (message, retryBtn) => {
+        const errEl = setupEl('error');
+        errEl.innerHTML = `<p>${escapeHtml(message)}</p>`;
+        if (retryBtn) {
+            const again = document.createElement('button');
+            again.type = 'button';
+            again.className = 'mt-2 text-xs px-3 py-1.5 rounded-lg border border-rose-200 bg-white font-semibold';
+            again.textContent = 'Coba lagi';
+            again.addEventListener('click', () => startSetup(retryBtn));
+            errEl.appendChild(again);
+        }
+        errEl.classList.remove('hidden');
+    };
+
+    const renderSetup = (data, btn) => {
+        const pct = data.progress ?? 0;
+        setupEl('pct').textContent = `${pct}%`;
+        setupEl('ring').style.strokeDashoffset = String(213.6 - (pct / 100) * 213.6);
+
+        const current = (data.steps ?? []).find((s) => s.status === 'running' || s.status === 'failed');
+        setupEl('label').textContent = data.status === 'completed' ? 'Selesai'
+            : data.status === 'failed' ? `Gagal: ${current?.label ?? 'setup'}`
+            : data.status === 'queued' ? 'Menunggu antrian proses...'
+            : (current?.label ?? 'Memproses...');
+
+        setupEl('steps').innerHTML = (data.steps ?? []).map((s) => {
+            const [color, icon] = stepView[s.status] ?? stepView.pending;
+            return `<div class="flex items-center gap-2 ${color}">${icon}<span>${escapeHtml(s.label)}</span></div>`;
+        }).join('');
+
+        if ((data.logs ?? []).length) {
+            setupLogs.innerHTML = data.logs.map((line) => `<div>${escapeHtml(line)}</div>`).join('');
+            setupLogs.classList.remove('hidden');
+            setupLogs.scrollTop = setupLogs.scrollHeight;
+        }
+
+        if (data.status === 'completed') {
+            stopSetupPoll();
+            setupEl('done').classList.remove('hidden');
+        } else if (data.status === 'failed') {
+            stopSetupPoll();
+            showSetupError(data.error || 'Setup gagal.', btn);
+        }
+    };
+
+    const pollSetup = (btn) => {
+        stopSetupPoll();
+        const tick = async () => {
+            try {
+                const res = await fetch(btn.dataset.statusUrl, { credentials: 'same-origin', headers: { Accept: 'application/json' } });
+                if (res.ok) renderSetup(await res.json(), btn);
+            } catch {
+                // dicoba lagi pada interval berikutnya
+            }
+        };
+        setupTimer = setInterval(tick, 2500);
+    };
+
+    const startSetup = async (btn) => {
+        resetSetup(btn.dataset.label);
+        setupModal.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(btn.dataset.setupUrl, {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content, 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            const data = await res.json().catch(() => ({}));
+            if (!res.ok) {
+                throw new Error(data.message || 'Gagal memulai setup.');
+            }
+            renderSetup(data, btn);
+            if (data.status === 'queued' || data.status === 'running') {
+                pollSetup(btn);
+            }
+        } catch (error) {
+            setupEl('label').textContent = 'Tidak bisa memulai';
+            showSetupError(error.message, null);
+        } finally {
+            btn.disabled = false;
+        }
+    };
+
+    const closeSetup = () => {
+        stopSetupPoll();
+        setupModal.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    };
+
+    document.querySelectorAll('.start-vps-setup').forEach((btn) => {
+        btn.addEventListener('click', () => {
+            if (confirm(`Jalankan setup otomatis di ${btn.dataset.label}?\n\nPanel akan login via SSH dan memasang Nginx, MySQL, PHP 7.4, ionCube & file deploy. Pastikan public key sudah terpasang di VPS.`)) {
+                startSetup(btn);
+            }
+        });
+    });
+    setupModal.querySelector('[data-progress-close]')?.addEventListener('click', closeSetup);
+    setupModal.querySelector('[data-progress-backdrop]')?.addEventListener('click', closeSetup);
+
+    @if ($errors->hasAny(['ip_address', 'code', 'location', 'max_rdm_capacity', 'ssh_private_key']) || old('ip_address'))
         openVps();
     @endif
 });

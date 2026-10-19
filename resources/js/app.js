@@ -390,11 +390,10 @@ function initSidebar() {
 }
 
 function initDeployWizard() {
-    const modal = document.getElementById('deploy-modal');
-    const openBtn = document.getElementById('open-deploy-wizard');
-    if (!modal) return;
+    const wizard = document.getElementById('deploy-wizard');
+    if (!wizard) return;
 
-    const vaMethods = JSON.parse(modal.dataset.vaMethods || '[]');
+    const vaMethods = JSON.parse(wizard.dataset.vaMethods || '[]');
     const formView = document.getElementById('wizard-form-view');
     const qrisView = document.getElementById('wizard-qris-view');
     const progressView = document.getElementById('wizard-progress-view');
@@ -403,21 +402,20 @@ function initDeployWizard() {
     const emailStatus = document.getElementById('email-status');
     const nextBtn = document.getElementById('wizard-next');
     const prevBtn = document.getElementById('wizard-prev');
-    const closeBtn = document.getElementById('close-deploy-wizard');
-    const backdrop = document.getElementById('deploy-modal-backdrop');
 
-    const isGuestMode = () => modal.dataset.guest === '1';
+    const isGuestMode = () => wizard.dataset.guest === '1';
 
     let step = 1;
     let subdomainAvailable = false;
-    let emailAvailable = modal.dataset.guest !== '1';
+    let emailAvailable = wizard.dataset.guest !== '1';
     let preparedInstanceId = null;
     let checkTimer = null;
     let emailCheckTimer = null;
     let pollState = { timer: null };
     let paymentPollTimer = null;
 
-    const packagePrices = JSON.parse(modal.dataset.packagePrices || '{"monthly":15000,"yearly":50000}');
+    const packagePrices = JSON.parse(wizard.dataset.packagePrices || '{"monthly":15000,"yearly":50000,"biennial":200000}');
+    const packageLabels = { monthly: 'Bulanan', yearly: 'Tahunan', biennial: '2 Tahunan' };
 
     const formatRp = (value) => `Rp${Number(value).toLocaleString('id-ID')}`;
     const stepHint = document.getElementById('wizard-step-hint');
@@ -521,20 +519,9 @@ function initDeployWizard() {
         if (step === 2) syncPasswordStatus();
     };
 
-    const showModal = () => {
-        modal.classList.remove('hidden');
-        document.body.classList.add('overflow-hidden');
-        initPasswordToggles(modal);
-        initIcons();
-    };
-
-    const hideModal = () => {
-        modal.classList.add('hidden');
-        document.body.classList.remove('overflow-hidden');
-        if (pollState.timer) clearInterval(pollState.timer);
-        if (paymentPollTimer) clearInterval(paymentPollTimer);
-        if (window.location.pathname === '/deploy') {
-            window.location.href = window.__rdmMonitorInstanceId ? '/dashboard/rdm' : '/';
+    const scrollToWizard = () => {
+        if (wizard.getBoundingClientRect().top < 0) {
+            wizard.scrollIntoView({ behavior: 'smooth', block: 'start' });
         }
     };
 
@@ -546,6 +533,12 @@ function initDeployWizard() {
         document.querySelectorAll('.wizard-step-dot').forEach((d) => {
             d.classList.toggle('bg-emerald-500', Number(d.dataset.step) <= n);
             d.classList.toggle('bg-emerald-100', Number(d.dataset.step) > n);
+        });
+        document.querySelectorAll('[data-step-label]').forEach((label) => {
+            const reached = Number(label.dataset.stepLabel) <= n;
+            label.classList.toggle('text-emerald-700', reached);
+            label.classList.toggle('font-medium', reached);
+            label.classList.toggle('text-gray-400', !reached);
         });
         prevBtn.classList.toggle('hidden', n === 1);
         if (n === 4) {
@@ -570,7 +563,7 @@ function initDeployWizard() {
 
         if (hargaEl) hargaEl.textContent = formatRp(packageAmount);
         if (adminEl) {
-            adminEl.textContent = selected ? formatRp(adminFee) : '—';
+            adminEl.textContent = selected ? (adminFee > 0 ? formatRp(adminFee) : 'Gratis') : '—';
             adminEl.classList.toggle('text-gray-400', !selected);
         }
         if (totalEl) totalEl.textContent = formatRp(packageAmount + adminFee);
@@ -649,9 +642,8 @@ function initDeployWizard() {
         if (picEl) {
             picEl.textContent = document.getElementById('w-pic-name')?.value.trim() ?? '';
         }
-        document.getElementById('c-paket').textContent = pkg === 'yearly'
-            ? `Tahunan (Rp${Number(packagePrices.yearly || 0).toLocaleString('id-ID')})`
-            : `Bulanan (Rp${Number(packagePrices.monthly || 0).toLocaleString('id-ID')})`;
+        const pkgCode = packageLabels[pkg] ? pkg : 'monthly';
+        document.getElementById('c-paket').textContent = `${packageLabels[pkgCode]} (Rp${Number(packagePrices[pkgCode] || 0).toLocaleString('id-ID')})`;
         syncDeployTotals();
     };
 
@@ -682,6 +674,7 @@ function initDeployWizard() {
             payload.email = document.getElementById('w-email').value.trim();
             payload.password = document.getElementById('w-password').value;
             payload.password_confirmation = document.getElementById('w-password-confirm').value;
+            payload.referral_code = document.getElementById('w-referral')?.value.trim() || null;
         }
 
         nextBtn.disabled = true;
@@ -710,7 +703,7 @@ function initDeployWizard() {
             preparedInstanceId = data.instance_id;
 
             if (data.account_created) {
-                modal.dataset.guest = '0';
+                wizard.dataset.guest = '0';
                 emailAvailable = true;
                 document.getElementById('deploy-account-hint')?.classList.add('hidden');
             }
@@ -759,22 +752,11 @@ function initDeployWizard() {
         }
     };
 
-    const openXenditPopup = (url) => {
-        const w = 480;
-        const h = 720;
-        const left = window.screenX + (window.outerWidth - w) / 2;
-        const top = window.screenY + (window.outerHeight - h) / 2;
-
-        return window.open(
-            url,
-            'xendit_checkout',
-            `width=${w},height=${h},left=${left},top=${top},scrollbars=yes,resizable=yes`,
-        );
-    };
-
     const showInlinePayment = async (data) => {
         formView.classList.add('hidden');
+        progressView.classList.add('hidden');
         qrisView?.classList.remove('hidden');
+        scrollToWizard();
 
         const amountEl = document.getElementById('qris-amount');
         const statusEl = document.getElementById('qris-status');
@@ -782,10 +764,11 @@ function initDeployWizard() {
         const subtitleEl = document.getElementById('inline-payment-subtitle');
         const qrisPanel = document.getElementById('inline-payment-qris');
         const vaPanel = document.getElementById('inline-payment-va');
+        const redirectPanel = document.getElementById('inline-payment-redirect');
         const canvas = document.getElementById('qris-canvas');
 
         if (amountEl) {
-            amountEl.textContent = formatRp(data.amount ?? 0);
+            amountEl.textContent = data.amount ? formatRp(data.amount) : '';
         }
         if (statusEl) {
             statusEl.textContent = 'Menunggu pembayaran...';
@@ -793,8 +776,20 @@ function initDeployWizard() {
         }
 
         const isVa = data.payment_mode === 'va_inline' || data.va_number;
+        const isRedirect = data.payment_mode === 'redirect';
 
-        if (isVa) {
+        redirectPanel?.classList.toggle('hidden', !isRedirect);
+
+        if (isRedirect) {
+            if (titleEl) titleEl.textContent = 'Menunggu Konfirmasi Pembayaran';
+            if (subtitleEl) subtitleEl.textContent = data.payment_label ? `Metode: ${data.payment_label}` : 'Pembayaran sedang diverifikasi';
+            qrisPanel?.classList.add('hidden');
+            vaPanel?.classList.add('hidden');
+
+            const link = document.getElementById('inline-payment-checkout-link');
+            document.getElementById('inline-payment-checkout-wrap')?.classList.toggle('hidden', !data.checkout_url);
+            if (link) link.href = data.checkout_url || '#';
+        } else if (isVa) {
             if (titleEl) titleEl.textContent = 'Transfer Virtual Account';
             if (subtitleEl) subtitleEl.textContent = 'Transfer ke nomor VA di bawah — tidak perlu buka halaman lain';
             qrisPanel?.classList.add('hidden');
@@ -846,54 +841,87 @@ function initDeployWizard() {
         pollState = startDeployStatusPoll(progressView, `/api/deploy/${instanceId}`, pollState);
     };
 
-    const waitForDeployPayment = (externalId, instanceId, popup) => new Promise((resolve, reject) => {
-        const cleanup = () => {
-            if (paymentPollTimer) clearInterval(paymentPollTimer);
-            window.removeEventListener('message', onMessage);
-        };
+    const showDeployProgress = (instanceId) => {
+        if (paymentPollTimer) clearInterval(paymentPollTimer);
+        formView.classList.add('hidden');
+        qrisView?.classList.add('hidden');
+        progressView.classList.remove('hidden');
+        resetDeployProgressUI(progressView);
+        scrollToWizard();
+        startDeployPoll(instanceId);
+    };
 
-        const onPaid = async () => {
-            cleanup();
-            popup?.close();
-            qrisView?.classList.add('hidden');
-            formView.classList.add('hidden');
-            progressView.classList.remove('hidden');
-            const statusEl = document.getElementById('qris-status');
-            if (statusEl) {
-                statusEl.textContent = 'Pembayaran berhasil! Memulai deploy...';
-                statusEl.className = 'text-sm text-emerald-700 font-medium';
-            }
-            startDeployPoll(instanceId);
-            resolve();
-        };
+    const fetchDeployPayment = async (externalId) => {
+        const res = await fetch(`/api/deploy/payment/${encodeURIComponent(externalId)}`, {
+            credentials: 'same-origin',
+            headers: { Accept: 'application/json' },
+        });
 
-        const onMessage = (event) => {
-            if (event.origin !== window.location.origin) return;
-            if (event.data?.type === 'xendit-deploy-paid' && event.data.ref === externalId) {
-                onPaid();
-            }
-        };
+        return res.ok ? res.json() : null;
+    };
 
-        window.addEventListener('message', onMessage);
+    const waitForDeployPayment = (externalId, instanceId) => {
+        if (paymentPollTimer) clearInterval(paymentPollTimer);
 
         paymentPollTimer = setInterval(async () => {
             try {
-                const res = await fetch(`/api/deploy/payment/${externalId}`, { credentials: 'same-origin' });
-                if (!res.ok) return;
-                const data = await res.json();
-                if (data.status === 'paid') {
-                    await onPaid();
+                const data = await fetchDeployPayment(externalId);
+                const statusEl = document.getElementById('qris-status');
+
+                if (data?.status === 'paid') {
+                    showDeployProgress(data.instance_id ?? instanceId);
+                } else if (data && ['expired', 'failed'].includes(data.status)) {
+                    clearInterval(paymentPollTimer);
+                    if (statusEl) {
+                        statusEl.textContent = data.status === 'expired'
+                            ? 'Batas waktu pembayaran habis. Silakan ganti metode pembayaran.'
+                            : 'Pembayaran gagal. Silakan ganti metode pembayaran.';
+                        statusEl.className = 'text-sm text-rose-700 font-medium';
+                    }
                 }
             } catch {
                 // retry on next interval
             }
-        }, 2000);
+        }, 3000);
+    };
 
-        const popupCheck = setInterval(() => {
-            if (popup && popup.closed) {
-                clearInterval(popupCheck);
+    const resumePaidCheckout = async (externalId) => {
+        try {
+            const data = await fetchDeployPayment(externalId);
+
+            if (!data) {
+                showPanel(1);
+                return;
             }
-        }, 1000);
+
+            preparedInstanceId = data.instance_id;
+
+            if (data.status === 'paid') {
+                showDeployProgress(data.instance_id);
+                return;
+            }
+
+            await showInlinePayment({ ...data, payment_mode: 'redirect' });
+
+            if (data.status === 'pending') {
+                waitForDeployPayment(externalId, data.instance_id);
+            } else {
+                const statusEl = document.getElementById('qris-status');
+                if (statusEl) {
+                    statusEl.textContent = 'Tagihan ini sudah tidak berlaku. Silakan ganti metode pembayaran.';
+                    statusEl.className = 'text-sm text-rose-700 font-medium';
+                }
+            }
+        } catch {
+            showPanel(1);
+        }
+    };
+
+    document.getElementById('change-payment-method')?.addEventListener('click', () => {
+        if (paymentPollTimer) clearInterval(paymentPollTimer);
+        window.location.href = preparedInstanceId
+            ? `${window.location.pathname}?resume=${encodeURIComponent(preparedInstanceId)}`
+            : window.location.pathname;
     });
 
     const payAndDeploy = async () => {
@@ -948,7 +976,7 @@ function initDeployWizard() {
                 }
 
                 await showInlinePayment(data);
-                await waitForDeployPayment(data.external_id, data.instance_id, null);
+                waitForDeployPayment(data.external_id, data.instance_id);
                 return;
             }
 
@@ -958,7 +986,7 @@ function initDeployWizard() {
                 }
 
                 await showInlinePayment(data);
-                await waitForDeployPayment(data.external_id, data.instance_id, null);
+                waitForDeployPayment(data.external_id, data.instance_id);
                 return;
             }
 
@@ -966,8 +994,8 @@ function initDeployWizard() {
                 throw new Error(data.message || 'URL pembayaran tidak tersedia. Muat ulang halaman lalu coba lagi.');
             }
 
-            const popup = openXenditPopup(data.invoice_url);
-            await waitForDeployPayment(data.external_id, data.instance_id, popup);
+            nextBtn.textContent = 'Membuka halaman pembayaran...';
+            window.location.href = data.invoice_url;
         } catch (e) {
             nextBtn.disabled = false;
             nextBtn.textContent = 'Bayar & Deploy';
@@ -983,46 +1011,6 @@ function initDeployWizard() {
         await payAndDeploy();
     };
 
-    const resetWizard = () => {
-        step = 1;
-        subdomainAvailable = false;
-        emailAvailable = modal.dataset.guest === '1' ? false : true;
-        preparedInstanceId = null;
-        subdomainInput.value = '';
-        document.getElementById('w-nama').value = '';
-        document.getElementById('w-pic-name') && (document.getElementById('w-pic-name').value = '');
-        document.getElementById('w-email') && (document.getElementById('w-email').value = '');
-        document.getElementById('w-password') && (document.getElementById('w-password').value = '');
-        document.getElementById('w-password-confirm') && (document.getElementById('w-password-confirm').value = '');
-        ['w-password', 'w-password-confirm'].forEach((id) => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.type = 'password';
-            }
-            const toggle = modal.querySelector(`[data-password-toggle][data-target="${id}"]`);
-            const icon = toggle?.querySelector('[data-lucide]');
-            if (icon) {
-                icon.setAttribute('data-lucide', 'eye');
-            }
-            toggle?.setAttribute('aria-label', 'Tampilkan password');
-        });
-        subdomainStatus?.classList.add('hidden');
-        emailStatus?.classList.add('hidden');
-        formView.classList.remove('hidden');
-        qrisView?.classList.add('hidden');
-        progressView.classList.add('hidden');
-        resetDeployProgressUI(progressView);
-        document.getElementById('deploy-payment-error')?.classList.add('hidden');
-        document.getElementById('deploy-prepare-notice')?.classList.add('hidden');
-        clearPrepareError();
-        showPanel(1);
-    };
-
-    openBtn?.addEventListener('click', () => { resetWizard(); showModal(); });
-    closeBtn?.addEventListener('click', hideModal);
-    backdrop?.addEventListener('click', hideModal);
-    document.getElementById('close-qris-view')?.addEventListener('click', hideModal);
-
     document.querySelectorAll('input[name="deploy_payment_method"]').forEach((radio) => {
         radio.addEventListener('change', () => {
             syncDeployTotals();
@@ -1034,7 +1022,7 @@ function initDeployWizard() {
                 } else if (vaMethods.includes(radio.value)) {
                     hint.textContent = 'Nomor Virtual Account ditampilkan langsung setelah klik Bayar & Deploy';
                 } else {
-                    hint.textContent = 'Metode ini membuka popup pembayaran Xendit';
+                    hint.textContent = 'Setelah klik Bayar & Deploy, Anda diarahkan ke halaman pembayaran. Halaman ini kembali otomatis setelah bayar.';
                 }
             }
         });
@@ -1061,7 +1049,10 @@ function initDeployWizard() {
         });
     });
 
-    prevBtn.addEventListener('click', () => showPanel(step - 1));
+    prevBtn.addEventListener('click', () => {
+        showPanel(step - 1);
+        scrollToWizard();
+    });
 
     nextBtn.addEventListener('click', async () => {
         const errors = getStepErrors();
@@ -1080,21 +1071,33 @@ function initDeployWizard() {
                 }
             }
             showPanel(step + 1);
+            scrollToWizard();
         } else {
             startDeploy();
         }
     });
 
+    initPasswordToggles(wizard);
+    initIcons();
+
+    const params = new URLSearchParams(window.location.search);
+
     if (window.__rdmResumeInstance) {
         applyResumeInstance(window.__rdmResumeInstance);
-        showModal();
         showPanel(4);
-    } else if (window.__rdmMonitorInstanceId) {
-        formView.classList.add('hidden');
-        progressView.classList.remove('hidden');
-        resetDeployProgressUI(progressView);
-        showModal();
-        startDeployPoll(window.__rdmMonitorInstanceId);
+    } else if (params.get('monitor')) {
+        showDeployProgress(params.get('monitor'));
+    } else if (params.get('paid')) {
+        resumePaidCheckout(params.get('paid'));
+    } else {
+        [['package', params.get('package')], ['deploy_payment_method', params.get('method')]].forEach(([name, value]) => {
+            const input = value && wizard.querySelector(`input[name="${name}"][value="${CSS.escape(value)}"]`);
+            if (input) {
+                input.checked = true;
+                input.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+        showPanel(1);
     }
 }
 

@@ -18,7 +18,7 @@ Setelah dihapus permanen:
 Perpanjang Sekarang
 </x-mail::button>
 
-Jika ada kendala, hubungi support@rdm-online.id.
+Jika ada kendala, hubungi {{ config('company.email') }}.
 
 Terima kasih,<br>
 {{ config('app.name') }}

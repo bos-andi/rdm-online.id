@@ -6,10 +6,10 @@
             </a>
 
             <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-gray-600">
-                <a href="#fitur" class="hover:text-emerald-600 transition-colors">Fitur</a>
-                <a href="#cara-kerja" class="hover:text-emerald-600 transition-colors">Cara Kerja</a>
-                <a href="#harga" class="hover:text-emerald-600 transition-colors">Harga</a>
-                <a href="#faq" class="hover:text-emerald-600 transition-colors">FAQ</a>
+                <a href="{{ route('landing') }}#fitur" class="hover:text-emerald-600 transition-colors">Fitur</a>
+                <a href="{{ route('landing') }}#cara-kerja" class="hover:text-emerald-600 transition-colors">Cara Kerja</a>
+                <a href="{{ route('landing') }}#harga" class="hover:text-emerald-600 transition-colors">Harga</a>
+                <a href="{{ route('landing') }}#faq" class="hover:text-emerald-600 transition-colors">FAQ</a>
             </nav>
 
             <div class="hidden md:flex items-center gap-3">
@@ -34,10 +34,10 @@
     </div>
 
     <div id="landing-mobile-menu" class="hidden md:hidden border-t border-emerald-100 bg-white px-4 py-4 space-y-1">
-        <a href="#fitur" class="block px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-gray-700">Fitur</a>
-        <a href="#cara-kerja" class="block px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-gray-700">Cara Kerja</a>
-        <a href="#harga" class="block px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-gray-700">Harga</a>
-        <a href="#faq" class="block px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-gray-700">FAQ</a>
+        <a href="{{ route('landing') }}#fitur" class="block px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-gray-700">Fitur</a>
+        <a href="{{ route('landing') }}#cara-kerja" class="block px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-gray-700">Cara Kerja</a>
+        <a href="{{ route('landing') }}#harga" class="block px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-gray-700">Harga</a>
+        <a href="{{ route('landing') }}#faq" class="block px-3 py-2.5 rounded-lg hover:bg-emerald-50 text-gray-700">FAQ</a>
         <div class="pt-3 flex flex-col gap-2">
             <a href="{{ route('user.login') }}" class="text-center py-2.5 rounded-xl border border-emerald-200 text-emerald-700 font-medium">Masuk</a>
             <a href="{{ route('deploy') }}" class="landing-btn-primary text-center py-2.5 rounded-xl">Deploy Sekarang</a>

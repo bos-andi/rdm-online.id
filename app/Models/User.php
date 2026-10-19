@@ -6,11 +6,12 @@ use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'madrasah_name', 'jenjang', 'email', 'password', 'must_change_password'])]
+#[Fillable(['name', 'madrasah_name', 'jenjang', 'email', 'password', 'must_change_password', 'referred_by_affiliate_id', 'referred_at'])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
@@ -23,12 +24,23 @@ class User extends Authenticatable
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
             'must_change_password' => 'boolean',
+            'referred_at' => 'datetime',
         ];
     }
 
     public function rdmInstances(): HasMany
     {
         return $this->hasMany(RdmInstance::class);
+    }
+
+    public function referrer(): BelongsTo
+    {
+        return $this->belongsTo(Affiliate::class, 'referred_by_affiliate_id');
+    }
+
+    public function affiliateCommissions(): HasMany
+    {
+        return $this->hasMany(AffiliateCommission::class);
     }
 
     public function jenjangLabel(): string

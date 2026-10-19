@@ -9,7 +9,7 @@ return [
     'items' => [
         ['icon' => 'home', 'label' => 'Dashboard', 'route' => 'user.dashboard'],
         ['icon' => 'book-open', 'label' => 'RDM Saya', 'route' => 'user.rdm'],
-        ['icon' => 'plus-circle', 'label' => 'Buat RDM Baru', 'route' => 'deploy'],
+        ['icon' => 'plus-circle', 'label' => 'Buat RDM Baru', 'route' => 'user.deploy'],
         ['icon' => 'globe', 'label' => 'Domain & DNS', 'route' => 'user.domain'],
         ['icon' => 'hard-drive', 'label' => 'Backup & Restore', 'route' => 'user.backup'],
         ['icon' => 'activity', 'label' => 'Monitoring', 'route' => 'user.monitoring'],
