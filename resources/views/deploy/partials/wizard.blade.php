@@ -220,11 +220,16 @@
                                                 name="deploy_payment_method"
                                                 value="{{ $method['code'] }}"
                                                 data-admin-fee="{{ $fee }}"
+                                                data-fee-percent="{{ $method['fee_percent'] ?? 0 }}"
+                                                data-fee-flat="{{ $method['fee_flat'] ?? $fee }}"
+                                                data-fee-customer="{{ ($method['fee_bearer'] ?? '') === 'customer' ? '1' : '0' }}"
                                                 class="mt-0.5 text-emerald-600"
                                             >
                                             <span class="min-w-0 text-sm">
                                                 <span class="font-semibold text-gray-900">{{ $method['label'] }}</span>
-                                                @if ($fee > 0)
+                                                @if (($method['fee_bearer'] ?? null) === 'merchant')
+                                                    <span class="block text-xs text-emerald-700">Tanpa biaya admin</span>
+                                                @elseif ($fee > 0)
                                                     <span class="block text-xs text-amber-700">+ Rp{{ number_format($fee, 0, ',', '.') }} admin</span>
                                                 @else
                                                     <span class="block text-xs text-emerald-700">Tanpa biaya admin</span>

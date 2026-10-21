@@ -106,6 +106,9 @@
                                                         name="method"
                                                         value="{{ $method['code'] }}"
                                                         data-admin-fee="{{ $fee }}"
+                                                        data-fee-percent="{{ $method['fee_percent'] ?? 0 }}"
+                                                        data-fee-flat="{{ $method['fee_flat'] ?? $fee }}"
+                                                        data-fee-customer="{{ ($method['fee_bearer'] ?? '') === 'customer' ? '1' : '0' }}"
                                                         data-label="{{ $method['label'] }}"
                                                         class="text-emerald-600"
                                                         @checked($firstMethod && $firstMethod['code'] === $method['code'])
@@ -189,7 +192,9 @@
                 const pkg = form.querySelector('input[name="package"]:checked');
                 const method = form.querySelector('input[name="method"]:checked');
                 const price = Number(pkg?.dataset.price || 0);
-                const fee = Number(method?.dataset.adminFee || 0);
+                const fee = method?.dataset.feeCustomer === '1'
+                    ? Math.ceil(price * Number(method.dataset.feePercent || 0) / 100) + Number(method.dataset.feeFlat || 0)
+                    : Number(method?.dataset.adminFee || 0);
 
                 text('summary-package', pkg?.dataset.name || '—');
                 text('summary-method', method?.dataset.label || '—');

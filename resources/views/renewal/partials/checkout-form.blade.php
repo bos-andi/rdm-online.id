@@ -61,6 +61,9 @@
                                         name="payment_method"
                                         value="{{ $method['code'] }}"
                                         data-admin-fee="{{ $methodAdminFee }}"
+                                        data-fee-percent="{{ $method['fee_percent'] ?? 0 }}"
+                                        data-fee-flat="{{ $method['fee_flat'] ?? $methodAdminFee }}"
+                                        data-fee-customer="{{ ($method['fee_bearer'] ?? '') === 'customer' ? '1' : '0' }}"
                                         class="mt-1 text-emerald-600 border-emerald-300 focus:ring-emerald-500"
                                         @checked(old('payment_method') === $method['code'])
                                         required

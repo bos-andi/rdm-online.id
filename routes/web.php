@@ -18,6 +18,7 @@ use App\Http\Controllers\DeployPageController;
 use App\Http\Controllers\DeployPaymentController;
 use App\Http\Controllers\LandingController;
 use App\Http\Controllers\RenewalController;
+use App\Http\Controllers\AndidevWebhookController;
 use App\Http\Controllers\TripayWebhookController;
 use App\Http\Controllers\XenditWebhookController;
 use App\Http\Controllers\User\AuthController as UserAuthController;
@@ -58,6 +59,8 @@ Route::post('/webhooks/xendit/qr-code', [XenditWebhookController::class, 'qrCode
     ->name('webhooks.xendit.qr-code');
 Route::post('/webhooks/xendit/payment-request', [XenditWebhookController::class, 'paymentRequest'])
     ->name('webhooks.xendit.payment-request');
+Route::post('/webhooks/andidev-pay', [AndidevWebhookController::class, 'handle'])
+    ->name('webhooks.andidev');
 Route::post('/webhooks/tripay/callback', [TripayWebhookController::class, 'handle'])
     ->name('webhooks.tripay');
 

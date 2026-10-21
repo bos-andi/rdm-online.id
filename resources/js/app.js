@@ -555,7 +555,11 @@ function initDeployWizard() {
         const pkg = document.querySelector('input[name="package"]:checked')?.value;
         const packageAmount = packagePrices[pkg] || 0;
         const selected = document.querySelector('input[name="deploy_payment_method"]:checked');
-        const adminFee = selected ? Number(selected.dataset.adminFee || 0) : 0;
+        const adminFee = selected
+            ? (selected.dataset.feeCustomer === '1'
+                ? Math.ceil(packageAmount * Number(selected.dataset.feePercent || 0) / 100) + Number(selected.dataset.feeFlat || 0)
+                : Number(selected.dataset.adminFee || 0))
+            : 0;
 
         const hargaEl = document.getElementById('c-harga');
         const adminEl = document.getElementById('c-admin');

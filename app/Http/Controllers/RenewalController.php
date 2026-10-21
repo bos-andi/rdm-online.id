@@ -80,7 +80,7 @@ class RenewalController extends Controller
             'instance' => $instance,
             'pkg' => $pkg,
             'amount' => $amount,
-            'adminFees' => $payments->adminFeesMap(),
+            'adminFees' => $payments->adminFeesMap($amount),
             'email' => $session['email'] ?? $instance->pic_email,
             'methodGroups' => $methodGroups,
             'statusLabel' => $subscriptions->statusLabel($instance),

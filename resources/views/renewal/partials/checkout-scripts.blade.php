@@ -26,7 +26,9 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
-        const adminFee = Number(selected.dataset.adminFee || 0);
+        const adminFee = selected.dataset.feeCustomer === '1'
+            ? Math.ceil(packageAmount * Number(selected.dataset.feePercent || 0) / 100) + Number(selected.dataset.feeFlat || 0)
+            : Number(selected.dataset.adminFee || 0);
         adminFeeEl.textContent = formatRp(adminFee);
         adminFeeEl.classList.remove('text-gray-400');
         adminFeeEl.classList.add('text-gray-800');

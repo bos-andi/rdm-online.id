@@ -18,12 +18,22 @@ class PaymentService
     public function __construct(
         private XenditService $xendit,
         private TripayService $tripay,
+        private AndidevPayService $andidev,
         private SubscriptionService $subscriptions,
     ) {}
 
     public function gateway(): string
     {
-        return config('payment.gateway') === 'tripay' ? 'tripay' : 'xendit';
+        return match (config('payment.gateway')) {
+            'andidev' => 'andidev',
+            'tripay' => 'tripay',
+            default => 'xendit',
+        };
+    }
+
+    public function usesAndidev(): bool
+    {
+        return $this->gateway() === 'andidev';
     }
 
     public function usesTripay(): bool
@@ -33,19 +43,26 @@ class PaymentService
 
     public function gatewayConfigured(): bool
     {
-        return $this->usesTripay() ? $this->tripay->isConfigured() : $this->xendit->isConfigured();
+        return match ($this->gateway()) {
+            'andidev' => $this->andidev->isConfigured(),
+            'tripay' => $this->tripay->isConfigured(),
+            default => $this->xendit->isConfigured(),
+        };
     }
 
     public function refreshAvailableChannels(): void
     {
-        $this->usesTripay()
-            ? $this->tripay->availableChannels(refresh: true)
-            : $this->xendit->availableChannels(refresh: true);
+        match ($this->gateway()) {
+            'andidev' => $this->andidev->availableChannels(refresh: true),
+            'tripay' => $this->tripay->availableChannels(refresh: true),
+            default => $this->xendit->availableChannels(refresh: true),
+        };
     }
 
     public function methodConfig(string $methodCode): ?array
     {
-        return config($this->gateway().'.methods.'.$methodCode);
+        return $this->availablePaymentMethods()[$methodCode]
+            ?? config($this->gateway().'.methods.'.$methodCode);
     }
 
     public function isVirtualAccountMethod(string $methodCode): bool
@@ -58,6 +75,19 @@ class PaymentService
      */
     public function gatewayChannelSummary(): array
     {
+        if ($this->usesAndidev()) {
+            $data = $this->andidev->availableChannels();
+
+            return array_filter([
+                'groups' => collect($data['channels'])
+                    ->groupBy('group')
+                    ->map(fn (Collection $channels) => $channels->pluck('name')->values()->all())
+                    ->all(),
+                'synced_at' => $data['synced_at'] ?? null,
+                'error' => $data['error'] ?? null,
+            ], fn ($value) => $value !== null);
+        }
+
         if ($this->usesTripay()) {
             $data = $this->tripay->availableChannels();
 
@@ -102,19 +132,29 @@ class PaymentService
         return (int) (config('deploy.packages.'.$package.'.price') ?? 0);
     }
 
-    public function adminFeeForMethod(string $methodCode): int
+    public function adminFeeForMethod(string $methodCode, ?int $amount = null): int
     {
-        $method = $this->methodConfig($methodCode);
+        $method = $this->methodConfig($methodCode) ?? [];
+
+        if ($this->usesAndidev()) {
+            if (($method['fee_bearer'] ?? 'merchant') !== 'customer') {
+                return 0;
+            }
+
+            $base = max(0, (int) $amount);
+
+            return (int) ceil($base * (float) ($method['fee_percent'] ?? 0) / 100) + (int) ($method['fee_flat'] ?? 0);
+        }
 
         return (int) ($method['admin_fee'] ?? config($this->gateway().'.default_admin_fee', 0));
     }
 
     /** @return array<string, int> */
-    public function adminFeesMap(): array
+    public function adminFeesMap(?int $amount = null): array
     {
         return collect($this->availablePaymentMethods())
             ->mapWithKeys(fn (array $method, string $code) => [
-                $code => $this->adminFeeForMethod($code),
+                $code => $this->adminFeeForMethod($code, $amount),
             ])
             ->all();
     }
@@ -123,7 +163,7 @@ class PaymentService
     public function checkoutBreakdownForPackage(string $package, string $methodCode): array
     {
         $packageAmount = $this->packageAmountFor($package);
-        $adminFee = $this->adminFeeForMethod($methodCode);
+        $adminFee = $this->adminFeeForMethod($methodCode, $packageAmount);
 
         return [
             'package_amount' => $packageAmount,
@@ -140,6 +180,29 @@ class PaymentService
 
     public function availablePaymentMethods(): array
     {
+        if ($this->usesAndidev()) {
+            $methods = collect(config('andidev.methods', []));
+            $channels = $this->andidev->isConfigured()
+                ? $this->andidev->availableChannels()['channels']
+                : [];
+
+            if ($channels !== []) {
+                $methods = $methods
+                    ->filter(fn ($method) => isset($channels[$method['andidev'] ?? '']))
+                    ->map(function ($method) use ($channels) {
+                        $channel = $channels[$method['andidev']];
+
+                        return array_merge($method, [
+                            'fee_percent' => $channel['fee_percent'],
+                            'fee_flat' => $channel['fee_flat'],
+                            'fee_bearer' => $channel['fee_bearer'],
+                        ]);
+                    });
+            }
+
+            return $methods->all();
+        }
+
         if ($this->usesTripay()) {
             $methods = collect(config('tripay.methods', []));
 
@@ -170,21 +233,24 @@ class PaymentService
     public function gatewayChannelsForMethod(string $methodCode): array
     {
         $gateway = $this->gateway();
-        $available = $this->usesTripay()
-            ? $this->tripay->isInternalMethodAvailable($methodCode)
-            : $this->xendit->isInternalMethodAvailable($methodCode);
+        $available = match ($gateway) {
+            'andidev' => isset($this->availablePaymentMethods()[$methodCode]),
+            'tripay' => $this->tripay->isInternalMethodAvailable($methodCode),
+            default => $this->xendit->isInternalMethodAvailable($methodCode),
+        };
 
         if (! $available) {
             throw new InvalidArgumentException('Metode pembayaran tidak tersedia.');
         }
 
         $method = $this->methodConfig($methodCode);
+        $channel = $method[$gateway] ?? null;
 
-        if (! $method || empty($method[$gateway])) {
+        if (! $method || $channel === null || $channel === '' || $channel === []) {
             throw new InvalidArgumentException('Metode pembayaran tidak valid.');
         }
 
-        return $method[$gateway];
+        return is_array($channel) ? $channel : [$channel];
     }
 
     public function storeCheckoutSession(string $subdomain, ?string $email): void
@@ -331,6 +397,10 @@ class PaymentService
         array $breakdown,
         string $purpose,
     ): Payment {
+        if ($payment->gateway === 'andidev') {
+            return $this->initializeAndidevCheckout($payment, $instance, $payerEmail, $paymentMethod, $breakdown, $purpose);
+        }
+
         if ($payment->gateway === 'tripay') {
             return $this->initializeTripayCheckout($payment, $instance, $payerEmail, $paymentMethod, $breakdown, $purpose);
         }
@@ -405,6 +475,87 @@ class PaymentService
             'meta' => array_merge($payment->meta ?? [], [
                 'payment_type' => 'invoice',
                 'create' => $invoice,
+            ]),
+        ]);
+
+        return $payment->fresh();
+    }
+
+
+    private function initializeAndidevCheckout(
+        Payment $payment,
+        RdmInstance $instance,
+        ?string $payerEmail,
+        string $paymentMethod,
+        array $breakdown,
+        string $purpose,
+    ): Payment {
+        $methodConfig = $this->methodConfig($paymentMethod) ?? [];
+        $channelCode = $methodConfig['andidev'] ?? null;
+
+        if (! is_string($channelCode) || $channelCode === '') {
+            throw new InvalidArgumentException('Metode pembayaran tidak tersedia. Pilih metode lain.');
+        }
+
+        $pkg = config('deploy.packages.'.$instance->package);
+        $itemName = ($purpose === 'deploy' ? 'Deploy RDM' : 'Langganan RDM').' - Paket '.($pkg['label'] ?? $instance->package);
+        $returnUrl = $purpose === 'deploy'
+            ? route('deploy.payment.success', ['ref' => $payment->external_id])
+            : route('renewal.success', ['subdomain' => $instance->subdomain, 'ref' => $payment->external_id]);
+        $email = $payerEmail ?: ($instance->pic_email ?: null);
+
+        $transaction = $this->andidev->createPayment(
+            $payment->external_id,
+            (int) $breakdown['package_amount'],
+            $channelCode,
+            $instance->madrasah_name ?: ($email ?? 'Pelanggan RDM'),
+            $email,
+            $itemName,
+            $returnUrl,
+            (int) ($methodConfig['expiry_minutes'] ?? config('andidev.expiry_minutes', 1440)),
+            [
+                'purpose' => $purpose,
+                'instance_id' => $instance->id,
+            ],
+        );
+
+        $expiresAt = $transaction['expires_at'] ?? null;
+        $customerFee = (int) ($transaction['customer_fee'] ?? 0);
+        $payAmount = (int) ($transaction['total_amount'] ?? ($breakdown['package_amount'] + $customerFee));
+
+        $meta = [
+            'payment_type' => 'invoice',
+            'channel_code' => $transaction['payment_channel'] ?? $channelCode,
+            'andidev_id' => $transaction['id'] ?? null,
+            'pay_amount' => $payAmount,
+            'expires_at' => $expiresAt,
+            'create' => $transaction,
+        ];
+
+        if (filled($transaction['qr_string'] ?? null)) {
+            $meta = array_merge($meta, [
+                'payment_type' => 'qris',
+                'qr_string' => $transaction['qr_string'],
+                'qr_expires_at' => $expiresAt,
+            ]);
+        } elseif ($this->isVirtualAccountMethod($paymentMethod) && filled($transaction['va_number'] ?? null)) {
+            $meta = array_merge($meta, [
+                'payment_type' => 'virtual_account',
+                'va_number' => (string) $transaction['va_number'],
+                'bank_label' => $methodConfig['label'] ?? ($transaction['payment_channel'] ?? $channelCode),
+                'va_expires_at' => $expiresAt,
+            ]);
+        } elseif (filled($transaction['payment_code'] ?? null)) {
+            $meta['payment_code'] = (string) $transaction['payment_code'];
+        }
+
+        $payment->update([
+            'amount' => $payAmount,
+            'gateway_reference' => $transaction['id'] ?? null,
+            'invoice_url' => $transaction['checkout_url'] ?? null,
+            'meta' => array_merge($payment->meta ?? [], $meta, [
+                'package_amount' => (int) $breakdown['package_amount'],
+                'admin_fee' => $customerFee,
             ]),
         ]);
 
@@ -653,8 +804,87 @@ class PaymentService
         }
     }
 
+    public function handleAndidevWebhook(array $event): void
+    {
+        $data = $event['data'] ?? null;
+
+        if (! is_array($data)) {
+            return;
+        }
+
+        $orderId = $data['order_id'] ?? null;
+
+        if (! $orderId) {
+            return;
+        }
+
+        $payment = Payment::query()
+            ->where('external_id', $orderId)
+            ->where('gateway', 'andidev')
+            ->first();
+
+        if (! $payment) {
+            return;
+        }
+
+        if ($payment->gateway_reference && filled($data['id'] ?? null) && $payment->gateway_reference !== $data['id']) {
+            return;
+        }
+
+        $this->applyAndidevStatus($payment, (string) ($event['event'] ?? ''), $data, 'webhook');
+    }
+
+    public function syncAndidevStatus(Payment $payment): bool
+    {
+        if ($payment->status === 'paid') {
+            return true;
+        }
+
+        if (! $payment->gateway_reference || ! Cache::add('andidev.sync.'.$payment->id, true, 5)) {
+            return false;
+        }
+
+        $transaction = $this->andidev->paymentDetail($payment->gateway_reference);
+        $this->applyAndidevStatus($payment, '', $transaction, 'sync');
+
+        return $payment->fresh()->status === 'paid';
+    }
+
+    private function applyAndidevStatus(Payment $payment, string $event, array $payload, string $source): void
+    {
+        $status = strtoupper((string) ($payload['status'] ?? ''));
+
+        if ($event === 'payment.succeeded' || $status === 'PAID') {
+            if ($payment->status !== 'paid') {
+                $this->markPaymentPaid($payment, $payload, $source);
+            }
+
+            return;
+        }
+
+        if (($event === 'payment.expired' || $status === 'EXPIRED') && $payment->status === 'pending') {
+            $payment->update([
+                'status' => 'expired',
+                'meta' => array_merge($payment->meta ?? [], [$source => $payload]),
+            ]);
+
+            return;
+        }
+
+        if ($status === 'FAILED' && $payment->status === 'pending') {
+            $payment->update([
+                'status' => 'failed',
+                'meta' => array_merge($payment->meta ?? [], [$source => $payload]),
+            ]);
+        }
+    }
+
     public function syncPaymentStatus(Payment $payment): bool
     {
+        if ($payment->gateway === 'andidev') {
+            return $this->syncAndidevStatus($payment);
+        }
+
         if ($payment->gateway === 'tripay') {
             return $this->syncTripayStatus($payment);
         }
